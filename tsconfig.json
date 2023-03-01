@@ -1,8 +1,0 @@
-{
-  "compilerOptions": {
-    "module": "ES2020",
-    "rootDir": "src",
-    "outDir": "dist/es",
-    "declaration": true
-  }
-}
