@@ -1,6 +1,6 @@
 import typescript from '@rollup/plugin-typescript';
 import generatePackageJson from 'rollup-plugin-generate-package-json'
-import {namespaceName} from "./rollup.globals";
+import {namespaceName} from "./rollup.globals.mjs";
 
 // rollup.config.js
 export default {
@@ -12,10 +12,7 @@ export default {
     },
     plugins: [
         typescript({
-            target: "ES5",
-            declaration: true,
-            outDir: "dist/es",
-            rootDir: "src"
+            tsconfig: "tsconfig.json"
         }),
         generatePackageJson({
             outputFolder: "dist",
