@@ -4,7 +4,9 @@ import {cpus} from 'os';
 console.log('Start Clusterfy demo...');
 
 const sharedMemory = new ClusterfyStorage({
-    test: 'init'
+    test: {
+        some: 1
+    }
 });
 Clusterfy.init(sharedMemory);
 
@@ -17,24 +19,19 @@ async function main() {
             console.log(`Init worker ${i} with id ${worker.id}`);
         }
         Clusterfy.initAsPrimary();
-
-        setTimeout(() => {
-            Clusterfy.saveToStorage('test', {
-                some: 123
-            });
-            Clusterfy.retrieveFromStorage('test.some');
-        }, 3000);
+        setInterval(async () => {
+            Clusterfy.outputStatisticsTable();
+        }, 1000);
     } else {
         Clusterfy.initAsWorker();
         setTimeout(async () => {
             try {
-                console.log('save...');
-                await Clusterfy.saveToStorage('test.new', 1);
-                console.log('saved');
+                let result = await Clusterfy.retrieveFromStorage<number>('test.some');
+                await Clusterfy.saveToStorage('test.blubb', Math.floor(Math.random() * 10000));
             } catch (e) {
-                console.log(`ERROR from worker ${Clusterfy.currentWorker.id}: ${e}`);
+                console.log(`!! ERROR from worker ${Clusterfy.currentWorker.id}: ${e.message}\n${e.stack}\n----`);
             }
-        }, 3000);
+        }, 3000 + Math.floor(Math.random() * 10000));
     }
 }
 

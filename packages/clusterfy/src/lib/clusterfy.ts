@@ -1,15 +1,31 @@
 import * as process from 'process';
 import * as _cluster from 'cluster';
-import {ClusterfyCommandRequest, ClusterfyIPCEvent, ClusterfyWorkerStatistics} from './types';
+import {
+    ClusterfyCommandRequest,
+    ClusterfyCommandRequestResult,
+    ClusterfyIPCEvent,
+    ClusterfyWorkerStatistics
+} from './types';
 import {Subject} from 'rxjs';
 import {v4 as UUIDv4} from 'UUID';
 
 const cluster = _cluster as unknown as _cluster.Cluster
 
 export class Clusterfy {
+    static get workers(): ClusterfyWorker[] {
+        return this._workers;
+    }
+
     private static _workers: ClusterfyWorker[] = [];
     private static storage: ClusterfyStorage<unknown>;
     private static events: Subject<ClusterfyIPCEvent>;
+    private static _commands: {
+        name: string;
+        target: 'primary' | 'worker';
+        handlers: {
+            runOnTarget: (args: Record<string, any>, commandEvent?: ClusterfyCommandRequest<any>) => Promise<ClusterfyCommandRequestResult<any>>;
+        }
+    }[] = [];
 
     static get currentWorker(): _cluster.Worker {
         return cluster.worker;
@@ -17,6 +33,12 @@ export class Clusterfy {
 
     static init<T>(storage: ClusterfyStorage<T>) {
         Clusterfy.storage = storage;
+    }
+
+    static initDefaultCommands() {
+        Clusterfy.registerIPCCommand('storage_save', 'primary', Clusterfy.handleStorageSave);
+        Clusterfy.registerIPCCommand('storage_retrieve', 'primary', Clusterfy.handleStorageRetrieve);
+        Clusterfy.registerIPCCommand('get_timestamp', 'worker', Clusterfy.handleGetTimestamp);
     }
 
     static fork(name?: string): _cluster.Worker {
@@ -31,21 +53,8 @@ export class Clusterfy {
             throw new Error('Can\'t initialize clusterfy as primary. Current process is worker process.');
         }
 
-        this.events = new Subject<ClusterfyIPCEvent>();
-        this.events.subscribe({
-            next: (event: ClusterfyIPCEvent) => {
-                const sender = this._workers.find(a => a.worker.id === event.senderID);
-
-                if (event.type === 'command') {
-                    const convertedEvent = event as ClusterfyCommandRequest;
-                    const args = convertedEvent.data.args;
-
-                    if (convertedEvent.data.command === 'storage_save') {
-                        Clusterfy.handleStorageSave(convertedEvent, args);
-                    }
-                }
-            }
-        });
+        Clusterfy.initDefaultCommands();
+        Clusterfy.events = new Subject<ClusterfyIPCEvent>();
 
         for (let i = 0; i < Clusterfy._workers.length; i++) {
             const worker = Clusterfy._workers[i];
@@ -60,99 +69,139 @@ export class Clusterfy {
             throw new Error('Can\'t initialize clusterfy as worker. Current process is primary.');
         }
 
+        Clusterfy.initDefaultCommands();
         this.events = new Subject<ClusterfyIPCEvent>();
         process.on('message', (message: ClusterfyIPCEvent) => {
             Clusterfy.onMessageReceived(undefined, message);
         });
     }
 
-    private static handleStorageSave(commandEvent: ClusterfyCommandRequest, args: any) {
-        Clusterfy.saveToStorage(args[0], args[1]).then(() => {
-            commandEvent.data.result = {status: 'success'};
-            Clusterfy.sendMessageToWorker(commandEvent.senderID, commandEvent);
-        }).catch((error) => {
-            commandEvent.data.result = {status: 'error', message: error?.message ?? error};
-            Clusterfy.sendMessageToWorker(commandEvent.senderID, commandEvent);
-        });
+    private static handleStorageSave = async ({
+                                                  path,
+                                                  value
+                                              }: Record<string, any>, commandEvent?: ClusterfyCommandRequest<any>) => {
+        this.storage.save(path, value);
+        const result = {
+            status: 'success',
+            data: undefined
+        } as ClusterfyCommandRequestResult<any>;
+
+        return result;
     }
 
-    static sendMessageToWorker(id: number, message: ClusterfyIPCEvent): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const {worker} = this._workers.find(a => a.worker.id === id);
-            if (worker) {
-                worker.send(message, (error: Error) => {
-                    if (error) {
-                        reject(error);
-                    } else {
-                        resolve();
-                    }
-                });
-            } else {
-                console.log(`Error: Worker not found with id ${id}`);
-            }
-        });
+    private static handleStorageRetrieve = async ({path}: Record<string, any>, commandEvent?: ClusterfyCommandRequest<any>) => {
+        if (Clusterfy.isCurrentProcessPrimary()) {
+            const data = this.storage.retrieve(path);
+            const result = {
+                status: 'success',
+                data
+            } as ClusterfyCommandRequestResult<any>;
+
+            return result;
+        } else {
+            throw Error(`handleStorageRetrieve must be called on primary!`);
+        }
     }
 
-    static sendMessageToPrimary(message: ClusterfyIPCEvent): Promise<void> {
+    private static handleGetTimestamp = async (args: Record<string, any>, commandEvent?: ClusterfyCommandRequestResult<any>) => {
+        return {
+            status: 'success',
+            data: 'timestamp is ' + Date.now()
+        } as ClusterfyCommandRequestResult<any>
+    }
+
+    /***
+     * sends a message to primary process or a worker. If workerID is undefined the message is sent to all workers.
+     * @param target
+     * @param message
+     * @param workerID
+     */
+    static sendMessage(target: 'primary' | 'worker', message: ClusterfyIPCEvent, workerID?: number): Promise<void> {
         return new Promise((resolve, reject) => {
-            process.send(message, (error: Error) => {
+            const handle = (error: Error) => {
                 if (error) {
                     reject(error);
                 } else {
                     resolve();
                 }
-            });
+            };
+            if (target === 'primary') {
+                process.send(message, handle);
+            } else {
+                // worker
+                const sendMessage = (worker: _cluster.Worker) => {
+                    if (worker) {
+                        worker.send(message, handle);
+                    } else {
+                        console.log(`Error: Worker not found with id ${workerID}`);
+                    }
+                };
+
+                if (workerID) {
+                    const {worker} = this._workers.find(a => a.worker.id === workerID);
+                    sendMessage(worker);
+                } else {
+                    for (const worker of this._workers) {
+                        sendMessage(worker.worker);
+                    }
+                }
+            }
         });
     }
 
     static onMessageReceived = (worker?: ClusterfyWorker, message?: ClusterfyIPCEvent): void => {
-        if (cluster.isPrimary) {
-            console.log(`Primary received message from worker ${worker!.worker.id} (${worker!.name}): ${message}`);
-        } else {
-            // worker
-            console.log(`Worker ${Clusterfy.currentWorker.id} received message from parent:`);
-            console.log(message);
-            console.log('______________');
+        const sender = this._workers.find(a => a.worker.id === message.senderID);
+
+        if (message.type === 'command') {
+            const convertedEvent = message as ClusterfyCommandRequest<any>;
+            const parameters = convertedEvent.data.args;
+            const commandObject = this._commands.find(a => a.name === convertedEvent.data.command);
+
+            if (!commandObject) {
+                throw new Error(`Can't run command "${commandObject.name}". Not found.`);
+            }
+
+            if (commandObject.target === 'primary' && Clusterfy.isCurrentProcessPrimary() ||
+                ( // or target is worker
+                    commandObject.target === 'worker' && !Clusterfy.isCurrentProcessPrimary() &&
+                    (!message.targetID || message.targetID === Clusterfy.currentWorker.id)
+                )
+            ) {
+                commandObject.handlers.runOnTarget(parameters, convertedEvent).then((result) => {
+                    const response = {...convertedEvent};
+                    response.data.result = result;
+                    Clusterfy.sendMessage(commandObject.target === 'primary' ? 'worker' : 'primary', response, convertedEvent.senderID);
+                }).catch((error) => {
+                    convertedEvent.data.result = {
+                        status: 'error',
+                        message: error?.message ?? error,
+                        stack: error?.stack
+                    };
+                    Clusterfy.sendMessage(commandObject.target === 'primary' ? 'worker' : 'primary', convertedEvent, convertedEvent.senderID);
+                });
+            }
         }
-        this.events.next(message);
+
+        Clusterfy.events.next(message);
     };
 
     static async saveToStorage(path: string, value: any): Promise<void> {
-        if (this.isCurrentProcessPrimary()) {
-            return new Promise<void>((resolve, reject) => {
-                try {
-                    this.storage.save(path, value);
-                    resolve();
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        } else {
-            const uuid = UUIDv4();
-            this.sendMessageToPrimary({
-                type: 'command',
-                data: {
-                    command: 'storage_save',
-                    args: [path, value],
-                    uuid,
-                },
-                senderID: cluster.worker.id,
-                timestamp: Date.now()
-            } as ClusterfyCommandRequest);
-            return await Clusterfy.waitForCommandResultEvent('storage_save', uuid);
-        }
+        return this.runIPCCommand<void>('storage_save', {path, value});
     }
 
     private static waitForCommandResultEvent<T>(command: string, uuid?: string) {
         return new Promise<T>((resolve, reject) => {
             const subscription = this.events.subscribe({
-                next: (event: ClusterfyCommandRequest) => {
+                next: (event: ClusterfyCommandRequest<any>) => {
                     if (event.data.command === command && event.data.uuid && uuid === event.data.uuid) {
                         subscription.unsubscribe();
                         if (event.data.result.status === 'success') {
                             resolve(event.data.result.data);
                         } else {
-                            reject(event.data.result.message);
+                            reject({
+                                message: event.data.result.message,
+                                stack: event.data.result.stack
+                            });
                         }
                     }
                 }
@@ -160,13 +209,8 @@ export class Clusterfy {
         });
     }
 
-    static retrieveFromStorage(path: string) {
-        if (this.isCurrentProcessPrimary()) {
-            const result = this.storage.retrieve(path);
-            console.log(JSON.stringify(result));
-        } else {
-            // TODO send request to primary
-        }
+    static retrieveFromStorage<T>(path: string): Promise<T> {
+        return this.runIPCCommand<T>('storage_retrieve', {path});
     }
 
     static getStatistics(): ClusterfyWorkerStatistics {
@@ -189,16 +233,57 @@ export class Clusterfy {
     }
 
     static outputStatisticsTable() {
-        const statistics = Clusterfy.getStatistics();
-        console.log('____________________Clusterfy Statistics_________________');
-        console.log('|\tid\t|\tname\t\t|\tstatus\t|');
-        console.log(`---------------------------------------------------------`);
+        if (Clusterfy.isCurrentProcessPrimary()) {
+            const statistics = Clusterfy.getStatistics();
+            console.log('____________________Clusterfy Statistics_________________');
+            console.log('|\tid\t|\tname\t\t|\tstatus\t|\tstorage\t');
+            console.log(`---------------------------------------------------------`);
 
-        for (const {id, name, status} of statistics.list) {
-            console.log(`|\t${id}\t|\t${name}\t|\t${status}\t|`)
+            for (const {id, name, status} of statistics.list) {
+                console.log(`|\t${id}\t|\t${name}\t|\t${status}\t|\t${JSON.stringify(this.storage)}\t`)
+            }
+
+            console.log(`---------------------------------------------------------`);
+        }
+    }
+
+    static registerIPCCommand<R>(command: string, target: 'primary' | 'worker',
+                                 runOnTarget: (args: Record<string, any>) => Promise<ClusterfyCommandRequestResult<R>>) {
+        Clusterfy._commands.push({
+            target,
+            name: command,
+            handlers: {
+                runOnTarget
+            }
+        });
+    }
+
+    static async runIPCCommand<T>(command: string, args: Record<string, any>, targetID?: number): Promise<T> {
+        const commandObject = this._commands.find(a => a.name === command);
+
+        if (!commandObject) {
+            throw new Error(`Can't run command "${command}". Not found.`);
         }
 
-        console.log(`---------------------------------------------------------`);
+        if (commandObject.target === 'primary' && Clusterfy.isCurrentProcessPrimary() ||
+            (commandObject.target === 'worker' && !Clusterfy.isCurrentProcessPrimary() && (!targetID || targetID === Clusterfy.currentWorker.id))) {
+            const result = await commandObject.handlers.runOnTarget(args);
+            return result.data;
+        } else {
+            const uuid = UUIDv4();
+            this.sendMessage(commandObject.target, {
+                type: 'command',
+                data: {
+                    command,
+                    args,
+                    uuid,
+                },
+                senderID: cluster.worker?.id,
+                targetID,
+                timestamp: Date.now()
+            } as ClusterfyCommandRequest<any>);
+            return Clusterfy.waitForCommandResultEvent(command, uuid);
+        }
     }
 
     static destroy() {
@@ -228,7 +313,7 @@ export class ClusterfyStorage<T> {
         this._snapshot = this.saveValueToObject(this._snapshot, value, splitted);
     }
 
-    retrieve(path: string): any {
+    retrieve<S>(path: string): S {
         const splitted = this.readPath(path);
         return this.readValueFromObject(this._snapshot, splitted);
     }
@@ -300,7 +385,7 @@ export class ClusterfyWorker {
     }
 
     private _worker: _cluster.Worker;
-    private _status = 'running';
+    private _status: 'idle' | 'running' | 'stopping' = 'idle';
     private _name: string;
 
     constructor(worker: _cluster.Worker, name?: string) {
