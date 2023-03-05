@@ -1,1 +1,1 @@
-export * from './lib/clusterfy-storage';
+export * from './lib/clusterfy';

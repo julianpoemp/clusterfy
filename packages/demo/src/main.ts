@@ -1,31 +1,28 @@
-import cluster from 'node:cluster';
-import {ClusterfyStorage} from 'clusterfy';
+import {Clusterfy, ClusterfyStorage} from 'clusterfy';
 import {cpus} from 'os';
-import {Worker} from 'cluster';
 
-console.log('Start clusterfy demo...');
+console.log('Start Clusterfy demo...');
 
 const sharedMemory = new ClusterfyStorage({
     test: 'init'
 });
+Clusterfy.init(sharedMemory);
+
 const numCPUs = cpus().length;
 
-if (cluster.isPrimary) {
-    const workers: Worker[] = [];
-
+if (Clusterfy.isCurrentProcessPrimary()) {
     for (let i = 0; i < numCPUs; i++) {
-        const worker = cluster.fork();
-        workers.push(worker);
+        const worker = Clusterfy.fork('superWorker');
         console.log(`Init worker ${i} with id ${worker.id}`);
     }
-    sharedMemory.initAsPrimary(workers);
-    setTimeout(() => {
-        sharedMemory.sendMessageToWorker(workers[0].id, 'message to worker 1');
-    }, 6000);
-} else {
-    sharedMemory.initAsWorker();
+    Clusterfy.initAsPrimary();
 
     setTimeout(() => {
-        sharedMemory.sendMessageToPrimary('all ok');
-    }, 4000);
+        Clusterfy.saveToStorage('test', {
+            some: 123
+        });
+        Clusterfy.retrieveFromStorage('test.some');
+    }, 3000);
+} else {
+    Clusterfy.initAsWorker();
 }

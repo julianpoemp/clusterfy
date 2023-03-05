@@ -15,6 +15,7 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
+      "clusterfy": ["packages/clusterfy/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]
