@@ -1,20 +1,25 @@
-import * as cluster from 'cluster';
-
 export interface ClusterfyIPCEvent {
     type: string;
-    data: unknown;
-    sender: cluster.Worker;
+    data: any;
+    senderID?: number;
     timestamp: number;
+}
+
+export interface ClusterfyCommandRequestResult extends Record<string, any> {
+    status: 'success' | 'error';
+    message?: string;
+    data?: any;
 }
 
 export interface ClusterfyCommandRequest extends ClusterfyIPCEvent {
     type: 'command';
     data: {
         command: string;
+        args: any[];
         uuid: string;
-        result?: unknown;
+        result?: ClusterfyCommandRequestResult;
+        duration?: number;
     };
-    sender: cluster.Worker;
 }
 
 export interface ClusterfyWorkerStatisticItem {

@@ -1,13 +1,19 @@
 import * as process from 'process';
 import * as _cluster from 'cluster';
-import * as child from 'node:child_process';
-import {ClusterfyWorkerStatistics} from './types';
+import {ClusterfyCommandRequest, ClusterfyIPCEvent, ClusterfyWorkerStatistics} from './types';
+import {Subject} from 'rxjs';
+import {v4 as UUIDv4} from 'UUID';
 
 const cluster = _cluster as unknown as _cluster.Cluster
 
 export class Clusterfy {
     private static _workers: ClusterfyWorker[] = [];
     private static storage: ClusterfyStorage<unknown>;
+    private static events: Subject<ClusterfyIPCEvent>;
+
+    static get currentWorker(): _cluster.Worker {
+        return cluster.worker;
+    }
 
     static init<T>(storage: ClusterfyStorage<T>) {
         Clusterfy.storage = storage;
@@ -25,6 +31,22 @@ export class Clusterfy {
             throw new Error('Can\'t initialize clusterfy as primary. Current process is worker process.');
         }
 
+        this.events = new Subject<ClusterfyIPCEvent>();
+        this.events.subscribe({
+            next: (event: ClusterfyIPCEvent) => {
+                const sender = this._workers.find(a => a.worker.id === event.senderID);
+
+                if (event.type === 'command') {
+                    const convertedEvent = event as ClusterfyCommandRequest;
+                    const args = convertedEvent.data.args;
+
+                    if (convertedEvent.data.command === 'storage_save') {
+                        Clusterfy.handleStorageSave(convertedEvent, args);
+                    }
+                }
+            }
+        });
+
         for (let i = 0; i < Clusterfy._workers.length; i++) {
             const worker = Clusterfy._workers[i];
             worker.worker.on('message', (message) => {
@@ -38,12 +60,23 @@ export class Clusterfy {
             throw new Error('Can\'t initialize clusterfy as worker. Current process is primary.');
         }
 
-        process.on('message', (message: child.Serializable) => {
+        this.events = new Subject<ClusterfyIPCEvent>();
+        process.on('message', (message: ClusterfyIPCEvent) => {
             Clusterfy.onMessageReceived(undefined, message);
         });
     }
 
-    static sendMessageToWorker(id: number, message: child.Serializable): Promise<void> {
+    private static handleStorageSave(commandEvent: ClusterfyCommandRequest, args: any) {
+        Clusterfy.saveToStorage(args[0], args[1]).then(() => {
+            commandEvent.data.result = {status: 'success'};
+            Clusterfy.sendMessageToWorker(commandEvent.senderID, commandEvent);
+        }).catch((error) => {
+            commandEvent.data.result = {status: 'error', message: error?.message ?? error};
+            Clusterfy.sendMessageToWorker(commandEvent.senderID, commandEvent);
+        });
+    }
+
+    static sendMessageToWorker(id: number, message: ClusterfyIPCEvent): Promise<void> {
         return new Promise((resolve, reject) => {
             const {worker} = this._workers.find(a => a.worker.id === id);
             if (worker) {
@@ -60,7 +93,7 @@ export class Clusterfy {
         });
     }
 
-    static sendMessageToPrimary(message: child.Serializable): Promise<void> {
+    static sendMessageToPrimary(message: ClusterfyIPCEvent): Promise<void> {
         return new Promise((resolve, reject) => {
             process.send(message, (error: Error) => {
                 if (error) {
@@ -72,17 +105,19 @@ export class Clusterfy {
         });
     }
 
-    static onMessageReceived = (worker?: ClusterfyWorker, message?: child.Serializable): void => {
+    static onMessageReceived = (worker?: ClusterfyWorker, message?: ClusterfyIPCEvent): void => {
         if (cluster.isPrimary) {
             console.log(`Primary received message from worker ${worker!.worker.id} (${worker!.name}): ${message}`);
         } else {
             // worker
-            console.log(`Worker ${process.ppid} received message from parent: ${message}`);
+            console.log(`Worker ${Clusterfy.currentWorker.id} received message from parent:`);
             console.log(message);
+            console.log('______________');
         }
+        this.events.next(message);
     };
 
-    static saveToStorage(path: string, value: any): Promise<void> {
+    static async saveToStorage(path: string, value: any): Promise<void> {
         if (this.isCurrentProcessPrimary()) {
             return new Promise<void>((resolve, reject) => {
                 try {
@@ -93,13 +128,36 @@ export class Clusterfy {
                 }
             });
         } else {
-            // TODO implement
-            // 1. send request to primary
-            // 2. wait for result
-            // 3. return promise
+            const uuid = UUIDv4();
+            this.sendMessageToPrimary({
+                type: 'command',
+                data: {
+                    command: 'storage_save',
+                    args: [path, value],
+                    uuid,
+                },
+                senderID: cluster.worker.id,
+                timestamp: Date.now()
+            } as ClusterfyCommandRequest);
+            return await Clusterfy.waitForCommandResultEvent('storage_save', uuid);
         }
+    }
 
-        console.log(JSON.stringify(this.storage));
+    private static waitForCommandResultEvent<T>(command: string, uuid?: string) {
+        return new Promise<T>((resolve, reject) => {
+            const subscription = this.events.subscribe({
+                next: (event: ClusterfyCommandRequest) => {
+                    if (event.data.command === command && event.data.uuid && uuid === event.data.uuid) {
+                        subscription.unsubscribe();
+                        if (event.data.result.status === 'success') {
+                            resolve(event.data.result.data);
+                        } else {
+                            reject(event.data.result.message);
+                        }
+                    }
+                }
+            });
+        });
     }
 
     static retrieveFromStorage(path: string) {
