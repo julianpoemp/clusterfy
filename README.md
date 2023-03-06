@@ -1,5 +1,7 @@
 # Clusterfy
 
+<img src="./docs/images/TerminalDemo.gif" alt="terminal demo gif"/>
+
 This library simplifies managing processes in a NodeJS cluster. It supports IPC via messaging and a shared storage
 managed by the primary process.
 
