@@ -1,8 +1,6 @@
 import {Clusterfy, ClusterfyStorage} from 'clusterfy';
 import {cpus} from 'os';
 
-console.log('Start Clusterfy demo...');
-
 const sharedMemory = new ClusterfyStorage({
     test: {
         some: 1
@@ -14,28 +12,39 @@ const numCPUs = cpus().length;
 
 async function main() {
     if (Clusterfy.isCurrentProcessPrimary()) {
-        for (let i = 0; i < numCPUs; i++) {
-            const worker = Clusterfy.fork('superWorker');
-            console.log(`Init worker ${i} with id ${worker.id}`);
-        }
+        console.log('Start Clusterfy demo...');
+        console.log('Primary: Hi workers! Are you ready?')
+        Clusterfy.fork('paul');
+        Clusterfy.fork('sarah');
+        Clusterfy.fork('john');
+        Clusterfy.fork('michael');
+
+        setTimeout(async () => {
+            try {
+                console.log('Primary: Paul, what is the current timestamp?')
+                let timestamp = await Clusterfy.runIPCCommand<number>('get_timestamp', [], {
+                    name: 'paul'
+                });
+                console.log(`Worker Paul: ${timestamp}`);
+                console.log('Primary: Sarah, what is the current timestamp?')
+                timestamp = await Clusterfy.runIPCCommand<number>('get_timestamp', [], {
+                    name: 'sarah'
+                });
+                console.log(`Worker Sarah: ${timestamp}`);
+            } catch (e) {
+                console.log(`!! ERROR from primary: ${e.message}\n${e.stack}\n----`);
+            }
+        }, 3000);
         Clusterfy.initAsPrimary();
     } else {
         Clusterfy.initAsWorker();
         setTimeout(async () => {
             try {
-                let result = await Clusterfy.retrieveFromStorage<number>('test.some');
-                await Clusterfy.saveToStorage('test.blubb', Math.floor(Math.random() * 10000));
-
-                if (Clusterfy.currentWorker.id === 3) {
-                    console.log('SEND get_timestamp from worker 3 to worker 1');
-                    const timestamp = await Clusterfy.runIPCCommand<number>('get_timestamp', [], 1);
-                    console.log(timestamp);
-                }
-
+                console.log(`Worker ${Clusterfy.currentWorker.name}: I'm ready`);
             } catch (e) {
-                console.log(`!! ERROR from worker ${Clusterfy.currentWorker.id}: ${e.message}\n${e.stack}\n----`);
+                console.log(`!! ERROR from worker ${Clusterfy.currentWorker.worker.id}: ${e.message}\n${e.stack}\n----`);
             }
-        }, 3000 + Math.floor(Math.random() * 10000));
+        }, 3000);
     }
 }
 

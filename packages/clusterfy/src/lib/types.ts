@@ -1,8 +1,11 @@
 export interface ClusterfyIPCEvent {
-    type: string;
+    type: 'command' | 'online';
     data: any;
     senderID?: number;
-    targetID?: number;
+    target?: {
+        id?: number;
+        name?: string;
+    };
     originID?: number;
     timestamp: number;
 }
@@ -20,7 +23,7 @@ export interface ClusterfyCommandRequest<T> extends ClusterfyIPCEvent {
     type: 'command';
     data: {
         command: string;
-        args: any[];
+        args: Record<string, any>;
         uuid: string;
         result?: ClusterfyCommandRequestResult<T>;
     };
