@@ -39,7 +39,9 @@
       "buildableProjectDepsInPackageJsonType": "dependencies"
     },
     "serve": {
-      "dependsOn": ["clusterfy:build"],
+      "dependsOn": [
+        "clusterfy:build"
+      ],
       "executor": "@nrwl/js:node",
       "options": {
         "buildTarget": "demo:build"
