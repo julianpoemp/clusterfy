@@ -1,5 +1,5 @@
 export interface ClusterfyIPCEvent {
-  type: 'command' | 'online';
+  type: 'command' | 'online' | 'result';
   data: any;
   senderID?: number;
   target?: {

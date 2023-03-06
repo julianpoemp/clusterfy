@@ -157,8 +157,6 @@ export class Clusterfy {
     worker?: ClusterfyWorker,
     message?: ClusterfyIPCEvent
   ): void => {
-    const sender = this._workers.find((a) => a.worker.id === message.senderID);
-
     if (message.type === 'command') {
       const convertedEvent = { ...message } as ClusterfyCommandRequest<any>;
       const parameters = convertedEvent.data.args;
@@ -168,6 +166,17 @@ export class Clusterfy {
           new Error(`Can't run command "${commandObject.name}". Not found.`)
         );
         return;
+      }
+
+      if (Clusterfy.isCurrentProcessPrimary()) {
+        if (!message.target?.id && message.target?.name) {
+          const found = this._workers.find(
+            (a) => a.name === message.target.name
+          );
+          convertedEvent.target = {
+            id: found?.worker.id,
+          };
+        }
       }
 
       if (
@@ -192,8 +201,7 @@ export class Clusterfy {
           }
         }
 
-        commandObject
-          .runOnTarget(parameters, convertedEvent)
+        Clusterfy.runOnTarget(commandObject, parameters, convertedEvent)
           .then((result) => {
             const response = { ...convertedEvent };
             response.data.result = result;
@@ -248,6 +256,22 @@ export class Clusterfy {
     }
 
     Clusterfy._events.next(message);
+  };
+  static runOnTarget = async (
+    commandObject: ClusterfyCommand,
+    args: Record<string, any>,
+    commandEvent?: ClusterfyCommandRequest<any>
+  ) => {
+    const result = await commandObject.runOnTarget(args, commandEvent);
+    this._events.next({
+      timestamp: Date.now(),
+      type: 'result',
+      data: {
+        command: commandObject.name,
+        result,
+      },
+    });
+    return result;
   };
 
   static onWorkerOnline = (worker: ClusterfyWorker, name?: string) => {
@@ -341,12 +365,13 @@ export class Clusterfy {
 
   static async runIPCCommand<T>(
     command: string,
-    args: Record<string, any>,
+    args?: Record<string, any>,
     target?: {
       name?: string;
       id?: number;
     }
   ): Promise<T> {
+    args = args ?? {};
     const commandObject = this._commands[command];
 
     if (target && Object.keys(target).length === 0) {
@@ -362,12 +387,11 @@ export class Clusterfy {
         Clusterfy.isCurrentProcessPrimary()) ||
       (commandObject.target === 'worker' &&
         !Clusterfy.isCurrentProcessPrimary() &&
-        (!target?.id ||
-          target.id === Clusterfy._currentWorker.worker.id ||
-          !target?.name ||
-          target.name === Clusterfy._currentWorker.name))
+        ((!target?.id && !target?.name) ||
+          (!target?.id && target?.id === Clusterfy._currentWorker.worker.id) ||
+          (!target?.name && target.name === Clusterfy._currentWorker.name)))
     ) {
-      const result = await commandObject.runOnTarget(args);
+      const result = await Clusterfy.runOnTarget(commandObject, args);
       return result.data;
     } else {
       const uuid = UUIDv4();
