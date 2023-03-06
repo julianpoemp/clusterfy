@@ -3,13 +3,16 @@ export interface ClusterfyIPCEvent {
     data: any;
     senderID?: number;
     targetID?: number;
+    originID?: number;
     timestamp: number;
 }
 
 export interface ClusterfyCommandRequestResult<T> extends Record<string, any> {
     status: 'success' | 'error';
-    message?: string;
-    stack?: string;
+    error?: {
+        message?: string;
+        stack?: string;
+    }
     data?: T;
 }
 
@@ -20,7 +23,6 @@ export interface ClusterfyCommandRequest<T> extends ClusterfyIPCEvent {
         args: any[];
         uuid: string;
         result?: ClusterfyCommandRequestResult<T>;
-        duration?: number;
     };
 }
 

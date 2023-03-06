@@ -12,13 +12,17 @@ import {v4 as UUIDv4} from 'UUID';
 const cluster = _cluster as unknown as _cluster.Cluster
 
 export class Clusterfy {
+    static get events(): Subject<ClusterfyIPCEvent> {
+        return this._events;
+    }
+
     static get workers(): ClusterfyWorker[] {
         return this._workers;
     }
 
     private static _workers: ClusterfyWorker[] = [];
     private static storage: ClusterfyStorage<unknown>;
-    private static events: Subject<ClusterfyIPCEvent>;
+    private static _events: Subject<ClusterfyIPCEvent>;
     private static _commands: {
         name: string;
         target: 'primary' | 'worker';
@@ -54,7 +58,7 @@ export class Clusterfy {
         }
 
         Clusterfy.initDefaultCommands();
-        Clusterfy.events = new Subject<ClusterfyIPCEvent>();
+        Clusterfy._events = new Subject<ClusterfyIPCEvent>();
 
         for (let i = 0; i < Clusterfy._workers.length; i++) {
             const worker = Clusterfy._workers[i];
@@ -70,7 +74,7 @@ export class Clusterfy {
         }
 
         Clusterfy.initDefaultCommands();
-        this.events = new Subject<ClusterfyIPCEvent>();
+        this._events = new Subject<ClusterfyIPCEvent>();
         process.on('message', (message: ClusterfyIPCEvent) => {
             Clusterfy.onMessageReceived(undefined, message);
         });
@@ -114,9 +118,9 @@ export class Clusterfy {
      * sends a message to primary process or a worker. If workerID is undefined the message is sent to all workers.
      * @param target
      * @param message
-     * @param workerID
+     * @param targetID
      */
-    static sendMessage(target: 'primary' | 'worker', message: ClusterfyIPCEvent, workerID?: number): Promise<void> {
+    static sendMessage(target: 'primary' | 'worker', message: ClusterfyIPCEvent, targetID?: number, redirection = false): Promise<void> {
         return new Promise((resolve, reject) => {
             const handle = (error: Error) => {
                 if (error) {
@@ -125,7 +129,8 @@ export class Clusterfy {
                     resolve();
                 }
             };
-            if (target === 'primary') {
+
+            if (target === 'primary' || redirection) {
                 process.send(message, handle);
             } else {
                 // worker
@@ -133,12 +138,12 @@ export class Clusterfy {
                     if (worker) {
                         worker.send(message, handle);
                     } else {
-                        console.log(`Error: Worker not found with id ${workerID}`);
+                        console.log(`Error: Worker not found with id ${targetID}`);
                     }
                 };
 
-                if (workerID) {
-                    const {worker} = this._workers.find(a => a.worker.id === workerID);
+                if (targetID) {
+                    const {worker} = this._workers.find(a => a.worker.id === targetID);
                     sendMessage(worker);
                 } else {
                     for (const worker of this._workers) {
@@ -153,7 +158,7 @@ export class Clusterfy {
         const sender = this._workers.find(a => a.worker.id === message.senderID);
 
         if (message.type === 'command') {
-            const convertedEvent = message as ClusterfyCommandRequest<any>;
+            const convertedEvent = {...message} as ClusterfyCommandRequest<any>;
             const parameters = convertedEvent.data.args;
             const commandObject = this._commands.find(a => a.name === convertedEvent.data.command);
 
@@ -164,25 +169,59 @@ export class Clusterfy {
             if (commandObject.target === 'primary' && Clusterfy.isCurrentProcessPrimary() ||
                 ( // or target is worker
                     commandObject.target === 'worker' && !Clusterfy.isCurrentProcessPrimary() &&
-                    (!message.targetID || message.targetID === Clusterfy.currentWorker.id)
+                    ((!convertedEvent.targetID || convertedEvent.targetID === Clusterfy.currentWorker.id) &&
+                        (convertedEvent.originID && convertedEvent.originID !== Clusterfy.currentWorker.id))
                 )
             ) {
+                if (!worker?.worker) {
+                    console.log(`Worker ${Clusterfy.currentWorker.id} got message from ${convertedEvent.senderID} to ${convertedEvent.targetID} of type ${convertedEvent.data?.command}`);
+                } else {
+                    console.log(`Primary got message from ${convertedEvent.senderID} to ${convertedEvent.targetID} of type ${convertedEvent.type} ${convertedEvent.data?.command}`);
+                }
+
+                let returnDirection: 'primary' | 'worker' = 'worker';
+
+                if (commandObject.target === 'worker') {
+                    returnDirection = 'primary';
+                    if (convertedEvent.targetID) {
+                        // message from worker to worker => switch sender with target
+                        const senderID = convertedEvent.senderID;
+                        convertedEvent.senderID = convertedEvent.targetID;
+                        convertedEvent.targetID = senderID;
+                    }
+                }
+
                 commandObject.handlers.runOnTarget(parameters, convertedEvent).then((result) => {
                     const response = {...convertedEvent};
                     response.data.result = result;
-                    Clusterfy.sendMessage(commandObject.target === 'primary' ? 'worker' : 'primary', response, convertedEvent.senderID);
+                    Clusterfy.sendMessage(returnDirection, response, convertedEvent.senderID);
                 }).catch((error) => {
                     convertedEvent.data.result = {
                         status: 'error',
-                        message: error?.message ?? error,
-                        stack: error?.stack
+                        error: {
+                            message: error?.message ?? error,
+                            stack: error?.stack
+                        }
                     };
-                    Clusterfy.sendMessage(commandObject.target === 'primary' ? 'worker' : 'primary', convertedEvent, convertedEvent.senderID);
+                    Clusterfy.sendMessage(returnDirection, convertedEvent, convertedEvent.senderID);
                 });
+            } else if (Clusterfy.isCurrentProcessPrimary() && convertedEvent.targetID && convertedEvent.senderID) {
+                if (!worker?.worker) {
+                    console.log(`Worker ${Clusterfy.currentWorker.id} got message from ${convertedEvent.senderID} to ${convertedEvent.targetID} of type ${convertedEvent.data?.command}`);
+                } else {
+                    console.log(`Primary got message from ${convertedEvent.senderID} to ${convertedEvent.targetID} of type ${convertedEvent.type} ${convertedEvent.data?.command}`);
+                }
+
+                const targetID = convertedEvent.targetID;
+                if (convertedEvent.targetID == convertedEvent.originID) {
+                    convertedEvent.senderID = undefined;
+                    convertedEvent.targetID = undefined;
+                }
+                Clusterfy.sendMessage('worker', convertedEvent, targetID);
             }
         }
 
-        Clusterfy.events.next(message);
+        Clusterfy._events.next(message);
     };
 
     static async saveToStorage(path: string, value: any): Promise<void> {
@@ -191,7 +230,7 @@ export class Clusterfy {
 
     private static waitForCommandResultEvent<T>(command: string, uuid?: string) {
         return new Promise<T>((resolve, reject) => {
-            const subscription = this.events.subscribe({
+            const subscription = this._events.subscribe({
                 next: (event: ClusterfyCommandRequest<any>) => {
                     if (event.data.command === command && event.data.uuid && uuid === event.data.uuid) {
                         subscription.unsubscribe();
@@ -199,8 +238,8 @@ export class Clusterfy {
                             resolve(event.data.result.data);
                         } else {
                             reject({
-                                message: event.data.result.message,
-                                stack: event.data.result.stack
+                                message: event.data.result.error.message,
+                                stack: event.data.result.error.stack
                             });
                         }
                     }
@@ -280,8 +319,9 @@ export class Clusterfy {
                 },
                 senderID: cluster.worker?.id,
                 targetID,
+                originID: Clusterfy.currentWorker?.id,
                 timestamp: Date.now()
-            } as ClusterfyCommandRequest<any>);
+            } as ClusterfyCommandRequest<any>, targetID, (commandObject.target === 'worker' && !Clusterfy.isCurrentProcessPrimary()));
             return Clusterfy.waitForCommandResultEvent(command, uuid);
         }
     }

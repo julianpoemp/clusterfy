@@ -19,15 +19,19 @@ async function main() {
             console.log(`Init worker ${i} with id ${worker.id}`);
         }
         Clusterfy.initAsPrimary();
-        setInterval(async () => {
-            Clusterfy.outputStatisticsTable();
-        }, 1000);
     } else {
         Clusterfy.initAsWorker();
         setTimeout(async () => {
             try {
                 let result = await Clusterfy.retrieveFromStorage<number>('test.some');
                 await Clusterfy.saveToStorage('test.blubb', Math.floor(Math.random() * 10000));
+
+                if (Clusterfy.currentWorker.id === 3) {
+                    console.log('SEND get_timestamp from worker 3 to worker 1');
+                    const timestamp = await Clusterfy.runIPCCommand<number>('get_timestamp', [], 1);
+                    console.log(timestamp);
+                }
+
             } catch (e) {
                 console.log(`!! ERROR from worker ${Clusterfy.currentWorker.id}: ${e.message}\n${e.stack}\n----`);
             }
