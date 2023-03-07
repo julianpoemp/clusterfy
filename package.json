@@ -4,8 +4,9 @@
   "license": "MIT",
   "scripts": {
     "start:demo": "nx serve demo",
-    "build:lib:prod": "nx build clusterfy && cp LICENSE.txt dist/packages/clusterfy/LICENSE.txt && cp README.md dist/packages/clusterfy/README.md",
-    "watch:lib": "nx build clusterfy --output-path node_modules/clusterfy --watch"
+    "build:lib:prod": "nx build clusterfy -c production && cp LICENSE.txt dist/packages/clusterfy/LICENSE.txt && cp README.md dist/packages/clusterfy/README.md",
+    "watch:lib": "nx build clusterfy --output-path node_modules/clusterfy --watch",
+    "changelog": "conventional-changelog -p angular -o CHANGELOG.md --verbose"
   },
   "private": true,
   "devDependencies": {
@@ -19,6 +20,7 @@
     "@types/node": "~18.7.1",
     "@typescript-eslint/eslint-plugin": "^5.36.1",
     "@typescript-eslint/parser": "^5.36.1",
+    "conventional-changelog-cli": "^2.2.2",
     "esbuild": "^0.17.5",
     "eslint": "~8.15.0",
     "eslint-config-prettier": "8.1.0",
