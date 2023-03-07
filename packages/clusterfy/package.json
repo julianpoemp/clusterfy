@@ -1,6 +1,23 @@
 {
   "name": "clusterfy",
   "version": "1.0.0",
+  "license": "MIT",
+  "author": {
+    "name": "Julian Poemp",
+    "url": "https://github.com/julianpoemp"
+  },
+  "description": "NodeJS package that simplifies process management and IPC in NodeJS cluster.",
+  "keywords": [
+    "nodejs",
+    "ipc",
+    "javascript-library",
+    "typescript-library",
+    "nodejs-cluster"
+  ],
+  "repository": {
+    "url": "https://github.com/julianpoemp/clusterfy"
+  },
+  "private": false,
   "peerDependencies": {
     "tslib": "^2.3.0",
     "rxjs": ">=7.5.0",
