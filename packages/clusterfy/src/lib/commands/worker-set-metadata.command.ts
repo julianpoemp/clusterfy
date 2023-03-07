@@ -8,7 +8,7 @@ import { Clusterfy } from 'clusterfy';
 export class ClusterfyWorkerMetadataCommand extends ClusterfyCommand {
   constructor() {
     super(undefined);
-    this.name = 'worker_set_metadata';
+    this.name = 'cy_worker_set_metadata';
     this.target = 'worker';
   }
 

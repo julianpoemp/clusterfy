@@ -1,15 +1,18 @@
 import * as process from 'process';
 import * as _cluster from 'cluster';
+import { Address } from 'cluster';
 import {
   ClusterfyCommandRequest,
   ClusterfyIPCEvent,
+  ClusterfyWorkerOptions,
   ClusterfyWorkerStatistics,
 } from './types';
-import { Subject } from 'rxjs';
+import { Subject, Subscription, timer } from 'rxjs';
 import { v4 as UUIDv4 } from 'UUID';
 import {
   ClusterfyCommand,
   ClusterfyIPCCommands,
+  ClusterfyShutdownCommand,
   ClusterfyStorageRetrieveCommand,
   ClusterfyStorageSaveCommand,
   ClusterfyTimestampGetCommand,
@@ -40,23 +43,38 @@ export class Clusterfy {
   private static _events: Subject<ClusterfyIPCEvent>;
   private static _currentWorker: ClusterfyWorker;
   private static _commands: ClusterfyIPCCommands = {
-    storage_save: new ClusterfyStorageSaveCommand(),
-    storage_retrieve: new ClusterfyStorageRetrieveCommand(),
-    get_timestamp: new ClusterfyTimestampGetCommand(),
-    worker_set_metadata: new ClusterfyWorkerMetadataCommand(),
+    cy_storage_save: new ClusterfyStorageSaveCommand(),
+    cy_storage_retrieve: new ClusterfyStorageRetrieveCommand(),
+    cy_get_timestamp: new ClusterfyTimestampGetCommand(),
+    cy_worker_set_metadata: new ClusterfyWorkerMetadataCommand(),
+    cy_shutdown: new ClusterfyShutdownCommand(),
   };
 
   static init<T>(storage: ClusterfyStorage<T>) {
     Clusterfy._storage = storage;
   }
 
-  static fork(name?: string): ClusterfyWorker {
-    const worker = new ClusterfyWorker(cluster.fork(), name);
+  static fork(
+    name?: string,
+    options?: ClusterfyWorkerOptions
+  ): ClusterfyWorker {
+    const worker = new ClusterfyWorker(cluster.fork(), name, options);
     this._workers.push(worker);
-    worker.worker.addListener('online', () => {
+    worker.worker.on('online', () => {
       Clusterfy.onWorkerOnline(worker, name);
     });
-
+    worker.worker.on('disconnect', () => {
+      Clusterfy.onWorkerDisconnect(worker);
+    });
+    worker.worker.on('error', (error: Error) => {
+      Clusterfy.onWorkerError(worker, error);
+    });
+    worker.worker.on('exit', (code: number, signal: string) => {
+      Clusterfy.onWorkerExit(worker, code, signal);
+    });
+    worker.worker.on('listening', (address: Address) => {
+      Clusterfy.onWorkerListening(worker, address);
+    });
     return worker;
   }
 
@@ -77,17 +95,32 @@ export class Clusterfy {
     }
   }
 
-  static initAsWorker() {
-    if (cluster.isPrimary) {
-      throw new Error(
-        `Can't initialize clusterfy as worker. Current process is primary.`
-      );
-    }
+  static initAsWorker(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (cluster.isPrimary) {
+        throw new Error(
+          `Can't initialize clusterfy as worker. Current process is primary.`
+        );
+      }
 
-    this._currentWorker = new ClusterfyWorker(cluster.worker);
-    this._events = new Subject<ClusterfyIPCEvent>();
-    process.on('message', (message: ClusterfyIPCEvent) => {
-      Clusterfy.onMessageReceived(undefined, message);
+      this._events = new Subject<ClusterfyIPCEvent>();
+      const subscr = this._events.subscribe({
+        next: (event) => {
+          if (
+            event.type === 'result' &&
+            event.data.command === this._commands.cy_worker_set_metadata.name &&
+            event.data?.result?.status === 'success'
+          ) {
+            subscr.unsubscribe();
+            resolve();
+          }
+        },
+      });
+
+      this._currentWorker = new ClusterfyWorker(cluster.worker);
+      process.on('message', (message: ClusterfyIPCEvent) => {
+        Clusterfy.onMessageReceived(undefined, message);
+      });
     });
   }
 
@@ -257,7 +290,7 @@ export class Clusterfy {
 
     Clusterfy._events.next(message);
   };
-  static runOnTarget = async (
+  private static runOnTarget = async (
     commandObject: ClusterfyCommand,
     args: Record<string, any>,
     commandEvent?: ClusterfyCommandRequest<any>
@@ -276,16 +309,120 @@ export class Clusterfy {
 
   static onWorkerOnline = (worker: ClusterfyWorker, name?: string) => {
     Clusterfy.runIPCCommand<void>(
-      this._commands.worker_set_metadata.name,
+      this._commands.cy_worker_set_metadata.name,
       { name },
       {
         id: worker.worker.id,
       }
     );
+
+    this._events.next({
+      type: 'online',
+      senderID: worker.worker.id,
+      timestamp: Date.now(),
+    });
   };
 
+  static onWorkerDisconnect = (worker: ClusterfyWorker) => {
+    this._events.next({
+      type: 'disconnect',
+      senderID: worker.worker.id,
+      timestamp: Date.now(),
+    });
+  };
+
+  static onWorkerError = (worker: ClusterfyWorker, error: Error) => {
+    this._events.next({
+      type: 'error',
+      data: error,
+      senderID: worker.worker.id,
+      timestamp: Date.now(),
+    });
+  };
+
+  static onWorkerExit = (
+    worker: ClusterfyWorker,
+    code: number,
+    signal: string
+  ) => {
+    this._workers = this._workers.filter(
+      (a) => a.worker.id !== worker.worker.id
+    );
+
+    this._events.next({
+      type: 'exit',
+      data: {
+        code,
+        signal,
+      },
+      senderID: worker.worker.id,
+      timestamp: Date.now(),
+    });
+
+    if (worker.options.revive && !signal && code > 0) {
+      //revive worker
+      console.log('REVIVE ' + worker.name);
+      Clusterfy.fork(worker.name, worker.options);
+    }
+  };
+
+  static onWorkerListening = (worker: ClusterfyWorker, address: Address) => {
+    this._events.next({
+      type: 'listening',
+      data: {
+        address,
+      },
+      senderID: worker.worker.id,
+      timestamp: Date.now(),
+    });
+  };
+
+  static async shutdownWorker(worker: ClusterfyWorker, timeout = 2000) {
+    return new Promise<void>((resolve, reject) => {
+      if (!this.isCurrentProcessPrimary()) {
+        reject(Error(`Only primary can shutdown workers`));
+        return;
+      }
+
+      let timerSubscription: Subscription = undefined;
+      const exitSubscription = this._events.subscribe({
+        next: (event) => {
+          if (event.type === 'exit' && event.senderID === worker.worker.id) {
+            exitSubscription.unsubscribe();
+            resolve();
+          }
+        },
+      });
+      const disconnectSubscription = this._events.subscribe({
+        next: (event) => {
+          if (
+            event.type === 'disconnect' &&
+            event.senderID === worker.worker.id
+          ) {
+            timerSubscription.unsubscribe();
+            disconnectSubscription.unsubscribe();
+          }
+        },
+      });
+
+      this.runIPCCommand<void>('cy_shutdown', undefined, {
+        id: worker.worker.id,
+      }).catch(reject);
+      worker.worker.disconnect();
+
+      timerSubscription = timer(timeout).subscribe({
+        next: () => {
+          worker.worker.kill();
+        },
+      });
+    });
+  }
+
   static async saveToStorage(path: string, value: any): Promise<void> {
-    return this.runIPCCommand<void>('storage_save', { path, value });
+    return this.runIPCCommand<void>(this._commands.cy_storage_save.name, {
+      path,
+      value,
+    });
   }
 
   private static waitForCommandResultEvent<T>(command: string, uuid?: string) {
@@ -293,8 +430,9 @@ export class Clusterfy {
       const subscription = this._events.subscribe({
         next: (event: ClusterfyCommandRequest<any>) => {
           if (
-            event.data.command === command &&
-            event.data.uuid &&
+            event.type === 'command' &&
+            event.data?.command === command &&
+            event.data?.uuid &&
             uuid === event.data.uuid
           ) {
             subscription.unsubscribe();
@@ -313,7 +451,9 @@ export class Clusterfy {
   }
 
   static retrieveFromStorage<T>(path: string): Promise<T> {
-    return this.runIPCCommand<T>('storage_retrieve', { path });
+    return this.runIPCCommand<T>(this._commands.cy_storage_retrieve.name, {
+      path,
+    });
   }
 
   static getStatistics(): ClusterfyWorkerStatistics {
@@ -324,6 +464,7 @@ export class Clusterfy {
     }
     const result: ClusterfyWorkerStatistics = {
       list: [],
+      workersOnline: 0,
     };
 
     for (const worker of this._workers) {
@@ -332,6 +473,7 @@ export class Clusterfy {
         name: worker.name,
         status: worker.status,
       });
+      result.workersOnline += worker.worker.isDead() ? 0 : 1;
     }
 
     return result;
@@ -422,11 +564,10 @@ export class Clusterfy {
   static destroy() {
     if (cluster.isPrimary) {
       for (const { worker } of this._workers) {
-        worker.off('message', Clusterfy.onMessageReceived);
-        worker.off('online', Clusterfy.onWorkerOnline);
+        worker.removeAllListeners();
       }
     } else {
-      process.off('message', Clusterfy.onMessageReceived);
+      process.removeAllListeners();
     }
   }
 
@@ -534,6 +675,18 @@ export class ClusterfyStorage<T> {
 }
 
 export class ClusterfyWorker {
+  get options(): ClusterfyWorkerOptions {
+    return this._options;
+  }
+
+  get status(): 'idle' | 'running' | 'stopping' {
+    return this._status;
+  }
+
+  set status(value: 'idle' | 'running' | 'stopping') {
+    this._status = value;
+  }
+
   set name(value: string) {
     this._name = value;
   }
@@ -546,16 +699,21 @@ export class ClusterfyWorker {
     return this._worker;
   }
 
-  get status(): string {
-    return this._status;
-  }
-
   private _worker: _cluster.Worker;
   private _status: 'idle' | 'running' | 'stopping' = 'idle';
   private _name: string;
 
-  constructor(worker: _cluster.Worker, name?: string) {
+  private _options: ClusterfyWorkerOptions = {
+    revive: false,
+  };
+
+  constructor(
+    worker: _cluster.Worker,
+    name?: string,
+    options?: ClusterfyWorkerOptions
+  ) {
     this._worker = worker;
     this._name = name;
+    this._options = options ?? this._options;
   }
 }

@@ -1,6 +1,18 @@
+export interface ClusterfyWorkerOptions {
+  name?: string;
+  revive?: boolean;
+}
+
 export interface ClusterfyIPCEvent {
-  type: 'command' | 'online' | 'result';
-  data: any;
+  type:
+    | 'command'
+    | 'online'
+    | 'result'
+    | 'disconnect'
+    | 'error'
+    | 'exit'
+    | 'listening';
+  data?: any;
   senderID?: number;
   target?: {
     id?: number;
@@ -37,4 +49,5 @@ export interface ClusterfyWorkerStatisticItem {
 
 export interface ClusterfyWorkerStatistics {
   list: ClusterfyWorkerStatisticItem[];
+  workersOnline: number;
 }

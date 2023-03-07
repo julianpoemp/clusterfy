@@ -7,7 +7,7 @@ import { ClusterfyCommand } from './clusterfy-command';
 export class ClusterfyTimestampGetCommand extends ClusterfyCommand {
   constructor() {
     super(undefined);
-    this.name = 'get_timestamp';
+    this.name = 'cy_get_timestamp';
     this.target = 'worker';
   }
 

@@ -8,7 +8,7 @@ import { Clusterfy } from 'clusterfy';
 export class ClusterfyStorageRetrieveCommand extends ClusterfyCommand {
   constructor() {
     super(undefined);
-    this.name = 'storage_retrieve';
+    this.name = 'cy_storage_retrieve';
     this.target = 'primary';
   }
 
