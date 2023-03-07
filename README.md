@@ -1,4 +1,4 @@
-# Clusterfy
+# Clusterfy <a href="https://www.npmjs.com/package/clusterfy"><img alt="npm" src="https://img.shields.io/npm/v/clusterfy"></a>
 
 This library simplifies managing processes in a NodeJS cluster. It supports IPC via messaging and a shared storage
 managed by the primary process.
