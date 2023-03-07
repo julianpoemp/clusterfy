@@ -18,7 +18,7 @@ async function main() {
         some: 1,
       },
     });
-    Clusterfy.init(sharedMemory);
+    Clusterfy.initStorage(sharedMemory);
 
     console.log('Start Clusterfy demo...');
     console.log('Primary: Hi workers! Are you ready?');

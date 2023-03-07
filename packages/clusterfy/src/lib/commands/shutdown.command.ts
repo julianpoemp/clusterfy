@@ -5,7 +5,6 @@ import {
 } from '../types';
 import { ClusterfyCommand } from './clusterfy-command';
 import { Clusterfy } from 'clusterfy';
-import * as process from 'process';
 
 export class ClusterfyShutdownCommand extends ClusterfyCommand {
   constructor() {
@@ -20,7 +19,7 @@ export class ClusterfyShutdownCommand extends ClusterfyCommand {
   ) => {
     if (!Clusterfy.isCurrentProcessPrimary()) {
       if (Clusterfy.currentWorker.status === ClusterfyWorkerStatus.IDLE) {
-        process.exit(0);
+        Clusterfy.exit(0);
       } else {
         Clusterfy.changeCurrentWorkerStatus(ClusterfyWorkerStatus.STOPPING);
         // the process should shut down itself

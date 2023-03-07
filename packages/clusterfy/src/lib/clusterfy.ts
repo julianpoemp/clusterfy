@@ -53,7 +53,7 @@ export class Clusterfy {
     cy_status_change: new ClusterfyStatusChangeCommand(),
   };
 
-  static init<T>(storage: ClusterfyStorage<T>) {
+  static initStorage<T>(storage: ClusterfyStorage<T>) {
     Clusterfy._storage = storage;
   }
 
@@ -81,7 +81,7 @@ export class Clusterfy {
     return worker;
   }
 
-  static initAsPrimary() {
+  static async initAsPrimary() {
     if (!cluster.isPrimary) {
       throw new Error(
         `Can't initialize clusterfy as primary. Current process is worker process.`
@@ -98,7 +98,7 @@ export class Clusterfy {
     }
   }
 
-  static initAsWorker(): Promise<void> {
+  static async initAsWorker(): Promise<void> {
     return new Promise<void>((resolve) => {
       if (cluster.isPrimary) {
         throw new Error(
@@ -134,7 +134,7 @@ export class Clusterfy {
    * @param targetID
    * @param redirection
    */
-  static sendMessage(
+  private static sendMessage(
     target: {
       type: string;
       name?: string;
@@ -189,7 +189,7 @@ export class Clusterfy {
     });
   }
 
-  static onMessageReceived = (
+  private static onMessageReceived = (
     worker?: ClusterfyWorker,
     message?: ClusterfyIPCEvent
   ): void => {
@@ -311,7 +311,7 @@ export class Clusterfy {
     return result;
   };
 
-  static onWorkerOnline = (worker: ClusterfyWorker, name?: string) => {
+  private static onWorkerOnline = (worker: ClusterfyWorker, name?: string) => {
     Clusterfy.runIPCCommand<void>(
       this._commands.cy_worker_set_metadata.name,
       { name },
@@ -331,7 +331,7 @@ export class Clusterfy {
     });
   };
 
-  static onWorkerDisconnect = (worker: ClusterfyWorker) => {
+  private static onWorkerDisconnect = (worker: ClusterfyWorker) => {
     this._events.next({
       type: 'disconnect',
       sender: {
@@ -342,7 +342,7 @@ export class Clusterfy {
     });
   };
 
-  static onWorkerError = (worker: ClusterfyWorker, error: Error) => {
+  private static onWorkerError = (worker: ClusterfyWorker, error: Error) => {
     this._events.next({
       type: 'error',
       data: error,
@@ -354,7 +354,7 @@ export class Clusterfy {
     });
   };
 
-  static onWorkerExit = (
+  private static onWorkerExit = (
     worker: ClusterfyWorker,
     code: number,
     signal: string
@@ -382,7 +382,10 @@ export class Clusterfy {
     }
   };
 
-  static onWorkerListening = (worker: ClusterfyWorker, address: Address) => {
+  private static onWorkerListening = (
+    worker: ClusterfyWorker,
+    address: Address
+  ) => {
     this._events.next({
       type: 'listening',
       data: {
@@ -470,7 +473,7 @@ export class Clusterfy {
     });
   }
 
-  static retrieveFromStorage<T>(path: string): Promise<T> {
+  static async retrieveFromStorage<T>(path: string): Promise<T> {
     return this.runIPCCommand<T>(this._commands.cy_storage_retrieve.name, {
       path,
     });
@@ -588,6 +591,12 @@ export class Clusterfy {
   }
 
   static changeCurrentWorkerStatus(newStatus: ClusterfyWorkerStatus) {
+    if (!this.isCurrentProcessPrimary()) {
+      throw new Error(
+        `changeCurrentWorkerStatus must be called on worker process.`
+      );
+    }
+
     const data = {
       newStatus,
       oldStatus: this.currentWorker.status,
@@ -605,7 +614,7 @@ export class Clusterfy {
     });
   }
 
-  static destroy() {
+  private static destroy() {
     if (cluster.isPrimary) {
       for (const { worker } of this._workers) {
         worker.removeAllListeners();
@@ -613,6 +622,11 @@ export class Clusterfy {
     } else {
       process.removeAllListeners();
     }
+  }
+
+  static exit(code = 0) {
+    this.destroy();
+    process.exit(code);
   }
 
   static isCurrentProcessPrimary() {
@@ -752,9 +766,9 @@ export class ClusterfyWorker {
   }
 
   constructor(
-      worker: _cluster.Worker,
-      name?: string,
-      options?: ClusterfyWorkerOptions
+    worker: _cluster.Worker,
+    name?: string,
+    options?: ClusterfyWorkerOptions
   ) {
     this._worker = worker;
     this._name = name;

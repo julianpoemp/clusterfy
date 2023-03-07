@@ -46,13 +46,13 @@ import {Clusterfy, ClusterfyIPCEvent, ClusterfyStorage} from 'clusterfy';
 
 async function main() {
     if (Clusterfy.isCurrentProcessPrimary()) {
-        // init shared memory
+        // initStorage shared memory
         const sharedMemory = new ClusterfyStorage({
             test: {
                 some: 1,
             },
         });
-        Clusterfy.init(sharedMemory);
+        Clusterfy.initStorage(sharedMemory);
 
         // create some workers asynchronously
         Clusterfy.fork('SomeName1');
@@ -87,13 +87,141 @@ main();
 
 ````
 
-## API
+## Getter
 
-### Graceful shutdown
+### currentWorker(): ClusterfyWorker
+
+Returns current worker (only on worker). Returns undefined else.
+
+### storage(): ClusterfyStorage<any>
+
+Returns shared storage (only on primary). Returns undefined else.
+
+### events(): Subject<ClusterfyIPCEvent>
+
+Returns observable of all events to this worker or primary.
+
+### workers(): ClusterfyWorker[]
+
+Returns array of workers (only on primary). Returns empty array else.
+
+## Functions
+
+### initStorage<T>(storage: ClusterfyStorage<T>)
+
+Initializes the storage. Call this method on primary. The storage must be an object, e.g.
+
+````
+{
+    test: {
+        something: 123
+    }
+}
+````
+
+### fork(name?: string, options?: ClusterfyWorkerOptions)
+
+Creates a new worker with given name and options.
+
+#### Options
+
+<table>
+<tr>
+<td><b>revive</b></td>
+<td>If the worker dies because of an error it will be revived.</td>
+</tr>
+</table>
+
+### initAsPrimary()
+
+Initializes the primary with Clusterfy. This method must be called on primary (see example).
+
+### async initAsWorker()
+
+Initializes the worker with Clusterfy and waits for metadata from primary. This method must be called on worker (see
+example). Wait until this method returns
+
+### async saveToStorage(path: string, value: any)
+
+Saves a serializable value to a path in the shared storage on primary. Path should be a string with dot notation to the
+attribute , e.g. "test.something". This method returns as soon as saved.
+
+### async retrieveFromStorage&lt;T&gt;(path: string)
+
+Returns a serializable value from a given path in shared storage. Path should be a string with dot notation to the
+attribute , e.g. "test.something". This method returns the value of type `T` as soon as retrieved.
+
+### async shutdownWorker(worker: ClusterfyWorker, timeout = 2000)
 
 If you call `Clusterfy.shutdownWorker(worker, 2000)` from primary it sends a cy_shutdown command to a worker. The worker
-gets status "stopping" and should exit itself using `process.exit(0)` in 2 seconds. If the worker doesn't exit itself,
+gets status "STOPPING" and should exit itself using `process.exit(0)` in 2 seconds (graceful shutdown). If the worker
+doesn't exit itself,
 the primary kill it.
+
+That means: the algorithm you are using for processing in a worker should check if the status is "
+STOPPING" using `Clusterfy.currentWorker.status` and then exit itself. The algorithm should also change the status to "
+PROCESSING" after it started processing
+and change it
+back to "IDLE" after finished. If a shutdown is received Clusterfy checks if the status is "IDLE" and
+calls `process.exit(0)` or changes the status to "STOPPING".
+
+### getStatistics()
+
+Returns a object with statistics about the workers. Call it on primary.
+
+### outputStatisticsTable()
+
+Outputs statistics from getStatistics to console. Call it on primary.
+
+### registerIPCCommand(command: clusterfyCommand)
+
+Registers a new custom command to the list of supported commands. Call this method on worker and primary.
+
+### changeCurrentWorkerStatus(status: ClusterfyWorkerStatus)
+
+Changes the status of the current worker and emits event of type "status" to itself and to primary.
+
+### exit(code = 0)
+
+Removes event listener of the current process and calls `process.exit(code)`.
+
+## Create custom command
+
+Each command should extend class `ClusterfyCommand`. See examples
+in [commands](https://github.com/julianpoemp/clusterfy/tree/main/packages/clusterfy/src/lib/commands).
+Call `registerIPCCommand(command)` on primary and worker.
+
+````Typescript
+export class ClusterfyCommand {
+    name: string;
+    target: 'primary' | 'worker';
+    runOnTarget: (
+        args: Record<string, any>,
+        commandEvent?: ClusterfyCommandRequest<any>
+    ) => Promise<ClusterfyCommandRequestResult<any>>;
+
+    constructor(options?: Partial<ClusterfyCommand>) {
+        if (options) {
+            Object.assign(this, options);
+        }
+    }
+}
+````
+
+<table>
+<tr>
+<td><b>name</b></td>
+<td>The name of the command in lower case. It should not start with "cy_" because only commands from Clusterfy should be named like that.</td>
+</tr>
+<tr>
+<td><b>target</b></td>
+<td>Take "primary" if this command should be run by primary and "worker" otherwise.</td>
+</tr>
+<tr>
+<td><b>runOnTarget</b></td>
+<td>method that is run on the target.</td>
+</tr>
+</table>
 
 # Development
 
