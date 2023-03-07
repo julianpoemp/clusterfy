@@ -35,6 +35,8 @@ different processes.
 npm install clusterfy --save
 ````
 
+Furthermore, you need to install rxjs >= 7.5.0 and uuid >= 7.0.3 if not already installed.
+
 # Usage
 
 Clusterfy is a static class that can be called everywhere. At the entrypoint of your application you want to start the
