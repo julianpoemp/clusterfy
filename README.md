@@ -3,7 +3,7 @@
 This library simplifies managing processes in a NodeJS cluster. It supports IPC via messaging and a shared storage
 managed by the primary process.
 
-<img src="./docs/images/TerminalDemo.gif" alt="terminal demo gif"/>
+<img src="https://raw.githubusercontent.com/julianpoemp/clusterfy/main/docs/images/TerminalDemo.gif" alt="terminal demo gif"/>
 
 For presentation timeouts were inserted. You can find the code to this terminal
 preview [here](https://github.com/julianpoemp/clusterfy/blob/main/packages/demo/src/main.ts).

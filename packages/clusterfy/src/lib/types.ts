@@ -56,7 +56,7 @@ export interface ClusterfyWorkerStatistics {
 
 export enum ClusterfyWorkerStatus {
   // worker is online and does nothing
-  "IDLE" = "IDLE'IDLE'/ w'IDLE'is online and is processing something
-  "PROCESSING" ='PROCESSING'",
-'PROCESSING'is requested to stop. Last status before death
-  "STOPPING" = "'STOPPING'}
+  'IDLE' = 'IDLE',
+  'PROCESSING' = 'PROCESSING',
+  'STOPPING' = 'STOPPING',
+}

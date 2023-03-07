@@ -4,6 +4,7 @@
   "license": "MIT",
   "scripts": {
     "start:demo": "nx serve demo",
+    "build:lib:prod": "nx build clusterfy && cp LICENSE.txt dist/packages/clusterfy/LICENSE.txt && cp README.md dist/packages/clusterfy/README.md",
     "watch:lib": "nx build clusterfy --output-path node_modules/clusterfy --watch"
   },
   "private": true,
