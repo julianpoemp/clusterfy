@@ -1,6 +1,7 @@
 import {
   ClusterfyCommandRequest,
   ClusterfyCommandRequestResult,
+  ClusterfyWorkerStatus,
 } from '../types';
 import { ClusterfyCommand } from './clusterfy-command';
 import { Clusterfy } from 'clusterfy';
@@ -18,10 +19,10 @@ export class ClusterfyShutdownCommand extends ClusterfyCommand {
     commandEvent?: ClusterfyCommandRequest<any>
   ) => {
     if (!Clusterfy.isCurrentProcessPrimary()) {
-      if (Clusterfy.currentWorker.status === 'idle') {
+      if (Clusterfy.currentWorker.status === ClusterfyWorkerStatus.IDLE) {
         process.exit(0);
       } else {
-        Clusterfy.currentWorker.status = 'stopping';
+        Clusterfy.currentWorker.status = ClusterfyWorkerStatus.STOPPING;
         // the process should shut down itself
       }
       return {

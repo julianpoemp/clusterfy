@@ -6,6 +6,7 @@ import {
   ClusterfyIPCEvent,
   ClusterfyWorkerOptions,
   ClusterfyWorkerStatistics,
+  ClusterfyWorkerStatus,
 } from './types';
 import { Subject, Subscription, timer } from 'rxjs';
 import { v4 as UUIDv4 } from 'UUID';
@@ -157,7 +158,7 @@ export class Clusterfy {
           if (worker) {
             worker.send(message, handle);
           } else {
-            console.log(`Error: Worker not found with id ${target.id}`);
+            handle(new Error(`Error: Worker not found with id ${target.id}`));
           }
         };
 
@@ -208,6 +209,7 @@ export class Clusterfy {
           );
           convertedEvent.target = {
             id: found?.worker.id,
+            name: found?.name,
           };
         }
       }
@@ -219,8 +221,8 @@ export class Clusterfy {
           !Clusterfy.isCurrentProcessPrimary() &&
           (!convertedEvent.target?.id ||
             convertedEvent.target.id === Clusterfy._currentWorker.worker.id) &&
-          (!convertedEvent.originID ||
-            convertedEvent.originID !== Clusterfy._currentWorker.worker.id))
+          (!convertedEvent.origin?.id ||
+            convertedEvent.origin?.id !== Clusterfy._currentWorker.worker.id))
       ) {
         let returnDirection: 'primary' | 'worker' = 'worker';
 
@@ -228,9 +230,9 @@ export class Clusterfy {
           returnDirection = 'primary';
           if (convertedEvent.target?.id) {
             // message from worker to worker => switch sender with target
-            const senderID = convertedEvent.senderID;
-            convertedEvent.senderID = convertedEvent.target?.id;
-            convertedEvent.target = { id: senderID };
+            const sender = { ...convertedEvent.sender };
+            convertedEvent.sender = { ...convertedEvent.target };
+            convertedEvent.target = sender;
           }
         }
 
@@ -241,11 +243,11 @@ export class Clusterfy {
             Clusterfy.sendMessage(
               {
                 type: returnDirection,
-                id: convertedEvent.senderID,
+                ...convertedEvent.sender,
               },
               response
             ).catch((error) => {
-              console.log(`Clusterfy ERROR: ${error}`);
+              this._events.error(error);
             });
           })
           .catch((error) => {
@@ -259,31 +261,31 @@ export class Clusterfy {
             Clusterfy.sendMessage(
               {
                 type: returnDirection,
-                id: convertedEvent.senderID,
+                ...convertedEvent.sender,
               },
               convertedEvent
             ).catch((error) => {
-              console.log(`Clusterfy ERROR: ${error}`);
+              this._events.error(error);
             });
           });
       } else if (
         Clusterfy.isCurrentProcessPrimary() &&
         convertedEvent.target?.id &&
-        convertedEvent.senderID
+        convertedEvent.sender?.id
       ) {
-        const targetID = convertedEvent.target?.id;
-        if (convertedEvent.target.id == convertedEvent.originID) {
-          convertedEvent.senderID = undefined;
+        const target = { ...convertedEvent.target };
+        if (convertedEvent.target.id == convertedEvent.origin?.id) {
+          convertedEvent.sender = undefined;
           convertedEvent.target = undefined;
         }
         Clusterfy.sendMessage(
           {
             type: 'worker',
-            id: targetID,
+            ...target,
           },
           convertedEvent
         ).catch((error) => {
-          console.log(`Clusterfy ERROR: ${error}`);
+          this._events.error(error);
         });
       }
     }
@@ -313,12 +315,16 @@ export class Clusterfy {
       { name },
       {
         id: worker.worker.id,
+        name: worker.name,
       }
     );
 
     this._events.next({
       type: 'online',
-      senderID: worker.worker.id,
+      sender: {
+        id: worker.worker.id,
+        name: worker.name,
+      },
       timestamp: Date.now(),
     });
   };
@@ -326,7 +332,10 @@ export class Clusterfy {
   static onWorkerDisconnect = (worker: ClusterfyWorker) => {
     this._events.next({
       type: 'disconnect',
-      senderID: worker.worker.id,
+      sender: {
+        id: worker.worker.id,
+        name: worker.name,
+      },
       timestamp: Date.now(),
     });
   };
@@ -335,7 +344,10 @@ export class Clusterfy {
     this._events.next({
       type: 'error',
       data: error,
-      senderID: worker.worker.id,
+      sender: {
+        id: worker.worker.id,
+        name: worker.name,
+      },
       timestamp: Date.now(),
     });
   };
@@ -355,13 +367,15 @@ export class Clusterfy {
         code,
         signal,
       },
-      senderID: worker.worker.id,
+      sender: {
+        id: worker.worker.id,
+        name: worker.name,
+      },
       timestamp: Date.now(),
     });
 
     if (worker.options.revive && !signal && code > 0) {
       //revive worker
-      console.log('REVIVE ' + worker.name);
       Clusterfy.fork(worker.name, worker.options);
     }
   };
@@ -372,7 +386,10 @@ export class Clusterfy {
       data: {
         address,
       },
-      senderID: worker.worker.id,
+      sender: {
+        id: worker.worker.id,
+        name: worker.name,
+      },
       timestamp: Date.now(),
     });
   };
@@ -387,7 +404,7 @@ export class Clusterfy {
       let timerSubscription: Subscription = undefined;
       const exitSubscription = this._events.subscribe({
         next: (event) => {
-          if (event.type === 'exit' && event.senderID === worker.worker.id) {
+          if (event.type === 'exit' && event.sender?.id === worker.worker.id) {
             exitSubscription.unsubscribe();
             resolve();
           }
@@ -397,7 +414,7 @@ export class Clusterfy {
         next: (event) => {
           if (
             event.type === 'disconnect' &&
-            event.senderID === worker.worker.id
+            event.sender?.id === worker.worker.id
           ) {
             timerSubscription.unsubscribe();
             disconnectSubscription.unsubscribe();
@@ -407,6 +424,7 @@ export class Clusterfy {
 
       this.runIPCCommand<void>('cy_shutdown', undefined, {
         id: worker.worker.id,
+        name: worker.name,
       }).catch(reject);
       worker.worker.disconnect();
 
@@ -549,9 +567,15 @@ export class Clusterfy {
             args,
             uuid,
           },
-          senderID: cluster.worker?.id,
+          sender: {
+            id: this.currentWorker?.worker.id,
+            name: this.currentWorker?.name,
+          },
           target,
-          originID: Clusterfy._currentWorker?.worker.id,
+          origin: {
+            id: this.currentWorker?.worker.id,
+            name: this.currentWorker?.name,
+          },
           timestamp: Date.now(),
         } as ClusterfyCommandRequest<any>,
         commandObject.target === 'worker' &&
@@ -679,11 +703,11 @@ export class ClusterfyWorker {
     return this._options;
   }
 
-  get status(): 'idle' | 'running' | 'stopping' {
+  get status(): ClusterfyWorkerStatus {
     return this._status;
   }
 
-  set status(value: 'idle' | 'running' | 'stopping') {
+  set status(value: ClusterfyWorkerStatus) {
     this._status = value;
   }
 
@@ -700,7 +724,7 @@ export class ClusterfyWorker {
   }
 
   private _worker: _cluster.Worker;
-  private _status: 'idle' | 'running' | 'stopping' = 'idle';
+  private _status: ClusterfyWorkerStatus = ClusterfyWorkerStatus.IDLE;
   private _name: string;
 
   private _options: ClusterfyWorkerOptions = {

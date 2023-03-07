@@ -3,6 +3,11 @@ export interface ClusterfyWorkerOptions {
   revive?: boolean;
 }
 
+export interface ClusterfySerializedWorker {
+  name?: string;
+  id?: number;
+}
+
 export interface ClusterfyIPCEvent {
   type:
     | 'command'
@@ -13,12 +18,9 @@ export interface ClusterfyIPCEvent {
     | 'exit'
     | 'listening';
   data?: any;
-  senderID?: number;
-  target?: {
-    id?: number;
-    name?: string;
-  };
-  originID?: number;
+  sender?: ClusterfySerializedWorker;
+  target?: ClusterfySerializedWorker;
+  origin?: ClusterfySerializedWorker;
   timestamp: number;
 }
 
@@ -44,10 +46,17 @@ export interface ClusterfyCommandRequest<T> extends ClusterfyIPCEvent {
 export interface ClusterfyWorkerStatisticItem {
   id: number;
   name: string;
-  status: string;
+  status: ClusterfyWorkerStatus;
 }
 
 export interface ClusterfyWorkerStatistics {
   list: ClusterfyWorkerStatisticItem[];
   workersOnline: number;
 }
+
+export enum ClusterfyWorkerStatus {
+  // worker is online and does nothing
+  "IDLE" = "IDLE'IDLE'/ w'IDLE'is online and is processing something
+  "PROCESSING" ='PROCESSING'",
+'PROCESSING'is requested to stop. Last status before death
+  "STOPPING" = "'STOPPING'}

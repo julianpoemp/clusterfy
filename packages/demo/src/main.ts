@@ -31,7 +31,7 @@ async function main() {
 
     Clusterfy.events.subscribe({
       next: (event) => {
-        //console.log(`Primary got event ${event.type} from ${event.senderID}`);
+        //console.log(`Primary got event ${event.type} (${event.data?.command}) from ${event.sender?.name} (${event.sender?.id}) to ${event.target?.name} (${event.target?.id})`);
       },
     });
 
@@ -51,14 +51,15 @@ async function main() {
           `----\nPrimary: OK. Now to all workers: what is the timestamp?`
         );
         await Clusterfy.runIPCCommand<number>('cy_get_timestamp', []);
-        console.log('Shutdown all gracefully...');
+
+        /*console.log('Shutdown all gracefully...');
         await Clusterfy.shutdownWorker(michael);
         await Clusterfy.shutdownWorker(paul);
         await Clusterfy.shutdownWorker(sarah);
         await Clusterfy.shutdownWorker(john);
         console.log(
           `Running workers: ${Clusterfy.getStatistics().workersOnline}`
-        );
+        );*/
       } catch (e) {
         console.log(`!! ERROR from primary: ${e.message}\n${e.stack}\n----`);
       }
@@ -110,7 +111,7 @@ async function main() {
       console.log(
         `----\nWorker Sarah: After waiting 13 seconds, Primary can you please show me value of test in shared memory?`
       );
-      const result = await Clusterfy.runIPCCommand('storage_retrieve', {
+      const result = await Clusterfy.runIPCCommand('cy_storage_retrieve', {
         path: 'test',
       });
       console.log(`Primary: ${result}`);

@@ -89,7 +89,7 @@ main();
 
 ## API
 
-### Graceful cy_shutdown
+### Graceful shutdown
 
 If you call `Clusterfy.shutdownWorker(worker, 2000)` from primary it sends a cy_shutdown command to a worker. The worker
 gets status "stopping" and should exit itself using `process.exit(0)` in 2 seconds. If the worker doesn't exit itself,
