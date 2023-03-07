@@ -24,6 +24,10 @@ import {
 const cluster = _cluster as unknown as _cluster.Cluster;
 
 export class Clusterfy {
+  static set currentWorker(value: ClusterfyWorker) {
+    this._currentWorker = value;
+  }
+
   static get currentWorker(): ClusterfyWorker {
     return this._currentWorker;
   }
@@ -81,7 +85,7 @@ export class Clusterfy {
     return worker;
   }
 
-  static async initAsPrimary() {
+  static initAsPrimary() {
     if (!cluster.isPrimary) {
       throw new Error(
         `Can't initialize clusterfy as primary. Current process is worker process.`
@@ -99,10 +103,12 @@ export class Clusterfy {
   }
 
   static async initAsWorker(): Promise<void> {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>((resolve, reject) => {
       if (cluster.isPrimary) {
-        throw new Error(
-          `Can't initialize clusterfy as worker. Current process is primary.`
+        reject(
+          new Error(
+            `Can't initialize clusterfy as worker. Current process is primary.`
+          )
         );
       }
 
@@ -120,7 +126,10 @@ export class Clusterfy {
         },
       });
 
-      this._currentWorker = new ClusterfyWorker(cluster.worker);
+      if (!this._currentWorker) {
+        this._currentWorker = new ClusterfyWorker(cluster.worker);
+      }
+
       process.on('message', (message: ClusterfyIPCEvent) => {
         Clusterfy.onMessageReceived(undefined, message);
       });
