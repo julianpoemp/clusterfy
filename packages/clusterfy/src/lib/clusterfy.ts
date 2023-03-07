@@ -113,6 +113,11 @@ export class Clusterfy {
       }
 
       this._events = new Subject<ClusterfyIPCEvent>();
+
+      process.on('message', (message: ClusterfyIPCEvent) => {
+        Clusterfy.onMessageReceived(undefined, message);
+      });
+
       const subscr = this._events.subscribe({
         next: (event) => {
           if (
@@ -120,18 +125,14 @@ export class Clusterfy {
             event.data.command === this._commands.cy_worker_set_metadata.name &&
             event.data?.result?.status === 'success'
           ) {
+            Clusterfy.currentWorker = new ClusterfyWorker(
+              cluster.worker,
+              event.data?.result?.data?.name
+            );
             subscr.unsubscribe();
             resolve();
           }
         },
-      });
-
-      if (!this._currentWorker) {
-        this._currentWorker = new ClusterfyWorker(cluster.worker);
-      }
-
-      process.on('message', (message: ClusterfyIPCEvent) => {
-        Clusterfy.onMessageReceived(undefined, message);
       });
     });
   }
@@ -231,9 +232,9 @@ export class Clusterfy {
         (commandObject.target === 'worker' &&
           !Clusterfy.isCurrentProcessPrimary() &&
           (!convertedEvent.target?.id ||
-            convertedEvent.target.id === Clusterfy._currentWorker.worker.id) &&
+            convertedEvent.target.id === cluster.worker.id) &&
           (!convertedEvent.origin?.id ||
-            convertedEvent.origin?.id !== Clusterfy._currentWorker.worker.id))
+            convertedEvent.origin?.id !== cluster.worker.id))
       ) {
         let returnDirection: 'primary' | 'worker' = 'worker';
 
@@ -562,7 +563,7 @@ export class Clusterfy {
       (commandObject.target === 'worker' &&
         !Clusterfy.isCurrentProcessPrimary() &&
         ((!target?.id && !target?.name) ||
-          (!target?.id && target?.id === Clusterfy._currentWorker.worker.id) ||
+          (!target?.id && target?.id === cluster.worker.id) ||
           (!target?.name && target.name === Clusterfy._currentWorker.name)))
     ) {
       const result = await Clusterfy.runOnTarget(commandObject, args);
@@ -582,12 +583,12 @@ export class Clusterfy {
             uuid,
           },
           sender: {
-            id: this.currentWorker?.worker.id,
+            id: cluster.worker?.id,
             name: this.currentWorker?.name,
           },
           target,
           origin: {
-            id: this.currentWorker?.worker.id,
+            id: cluster.worker?.id,
             name: this.currentWorker?.name,
           },
           timestamp: Date.now(),

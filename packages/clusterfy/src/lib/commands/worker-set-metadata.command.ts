@@ -3,7 +3,7 @@ import {
   ClusterfyCommandRequestResult,
 } from '../types';
 import { ClusterfyCommand } from './clusterfy-command';
-import { Clusterfy, ClusterfyWorker } from 'clusterfy';
+import { Clusterfy } from 'clusterfy';
 import * as _cluster from 'cluster';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
@@ -28,12 +28,11 @@ export class ClusterfyWorkerMetadataCommand extends ClusterfyCommand {
       } as ClusterfyCommandRequestResult<any>;
     }
 
-    if (!Clusterfy.currentWorker) {
-      Clusterfy.currentWorker = new ClusterfyWorker(cluster.worker, name);
-    }
-
     return {
       status: 'success',
+      data: {
+        name,
+      },
     } as ClusterfyCommandRequestResult<any>;
   };
 }
