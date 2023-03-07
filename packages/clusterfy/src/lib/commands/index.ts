@@ -3,6 +3,7 @@ import { ClusterfyStorageSaveCommand } from './storage-save.command';
 import { ClusterfyStorageRetrieveCommand } from './storage-retrieve.command';
 import { ClusterfyTimestampGetCommand } from './get-timestamp.command';
 import { ClusterfyWorkerMetadataCommand } from './worker-set-metadata.command';
+import { ClusterfyStatusChangeCommand } from './status-change.command';
 
 export * from './clusterfy-command';
 export * from './get-timestamp.command';
@@ -10,6 +11,7 @@ export * from './storage-retrieve.command';
 export * from './storage-save.command';
 export * from './worker-set-metadata.command';
 export * from './shutdown.command';
+export * from './status-change.command';
 
 export interface ClusterfyIPCCommands {
   cy_storage_save: ClusterfyStorageSaveCommand;
@@ -17,4 +19,5 @@ export interface ClusterfyIPCCommands {
   cy_get_timestamp: ClusterfyTimestampGetCommand;
   cy_worker_set_metadata: ClusterfyWorkerMetadataCommand;
   cy_shutdown: ClusterfyShutdownCommand;
+  cy_status_change: ClusterfyStatusChangeCommand;
 }

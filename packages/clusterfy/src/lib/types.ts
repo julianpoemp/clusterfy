@@ -16,7 +16,8 @@ export interface ClusterfyIPCEvent {
     | 'disconnect'
     | 'error'
     | 'exit'
-    | 'listening';
+    | 'listening'
+    | 'status';
   data?: any;
   sender?: ClusterfySerializedWorker;
   target?: ClusterfySerializedWorker;

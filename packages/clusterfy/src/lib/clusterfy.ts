@@ -14,6 +14,7 @@ import {
   ClusterfyCommand,
   ClusterfyIPCCommands,
   ClusterfyShutdownCommand,
+  ClusterfyStatusChangeCommand,
   ClusterfyStorageRetrieveCommand,
   ClusterfyStorageSaveCommand,
   ClusterfyTimestampGetCommand,
@@ -49,6 +50,7 @@ export class Clusterfy {
     cy_get_timestamp: new ClusterfyTimestampGetCommand(),
     cy_worker_set_metadata: new ClusterfyWorkerMetadataCommand(),
     cy_shutdown: new ClusterfyShutdownCommand(),
+    cy_status_change: new ClusterfyStatusChangeCommand(),
   };
 
   static init<T>(storage: ClusterfyStorage<T>) {
@@ -585,6 +587,24 @@ export class Clusterfy {
     }
   }
 
+  static changeCurrentWorkerStatus(newStatus: ClusterfyWorkerStatus) {
+    const data = {
+      newStatus,
+      oldStatus: this.currentWorker.status,
+    };
+
+    this.currentWorker.changeStatus(newStatus);
+    this._events.next({
+      type: 'status',
+      data,
+      timestamp: Date.now(),
+    });
+
+    this.runIPCCommand<void>(this._commands.cy_status_change.name, {
+      newStatus,
+    });
+  }
+
   static destroy() {
     if (cluster.isPrimary) {
       for (const { worker } of this._workers) {
@@ -707,10 +727,6 @@ export class ClusterfyWorker {
     return this._status;
   }
 
-  set status(value: ClusterfyWorkerStatus) {
-    this._status = value;
-  }
-
   set name(value: string) {
     this._name = value;
   }
@@ -731,10 +747,14 @@ export class ClusterfyWorker {
     revive: false,
   };
 
+  public changeStatus(status: ClusterfyWorkerStatus) {
+    this._status = status;
+  }
+
   constructor(
-    worker: _cluster.Worker,
-    name?: string,
-    options?: ClusterfyWorkerOptions
+      worker: _cluster.Worker,
+      name?: string,
+      options?: ClusterfyWorkerOptions
   ) {
     this._worker = worker;
     this._name = name;

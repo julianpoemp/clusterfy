@@ -22,7 +22,7 @@ export class ClusterfyShutdownCommand extends ClusterfyCommand {
       if (Clusterfy.currentWorker.status === ClusterfyWorkerStatus.IDLE) {
         process.exit(0);
       } else {
-        Clusterfy.currentWorker.status = ClusterfyWorkerStatus.STOPPING;
+        Clusterfy.changeCurrentWorkerStatus(ClusterfyWorkerStatus.STOPPING);
         // the process should shut down itself
       }
       return {
