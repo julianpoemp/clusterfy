@@ -3,8 +3,8 @@ import {
   ClusterfyCommandRequestResult,
 } from '../types';
 import { ClusterfyCommand } from './clusterfy-command';
-import { Clusterfy } from 'clusterfy';
 import * as _cluster from 'cluster';
+import { Clusterfy } from '../clusterfy';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 

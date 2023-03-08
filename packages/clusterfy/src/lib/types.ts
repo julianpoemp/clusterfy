@@ -3,6 +3,10 @@ export interface ClusterfyWorkerOptions {
   revive?: boolean;
 }
 
+export interface ClusterfyShutdownOptions {
+  gracefulOnSignals?: NodeJS.Signals[];
+}
+
 export interface ClusterfySerializedWorker {
   name?: string;
   id?: number;

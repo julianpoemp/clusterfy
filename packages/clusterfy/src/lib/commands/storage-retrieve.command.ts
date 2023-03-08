@@ -3,7 +3,7 @@ import {
   ClusterfyCommandRequestResult,
 } from '../types';
 import { ClusterfyCommand } from './clusterfy-command';
-import { Clusterfy } from 'clusterfy';
+import { Clusterfy } from '../clusterfy';
 
 export class ClusterfyStorageRetrieveCommand extends ClusterfyCommand {
   constructor() {

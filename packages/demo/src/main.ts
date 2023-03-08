@@ -1,5 +1,6 @@
 import { Clusterfy, ClusterfyIPCEvent, ClusterfyStorage } from 'clusterfy';
 import * as _cluster from 'cluster';
+import * as process from 'process';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
@@ -9,6 +10,16 @@ const wait = async (time: number) => {
       resolve();
     }, time);
   });
+};
+
+const onShutdown = async () => {
+  console.log(`Simulate cleanup on shutdown for ${Clusterfy.currentLabel}...`);
+
+  let j = 0;
+  for (let i = 0; i < 100000; i++) {
+    j++;
+  }
+  console.log(`All cleaned up for ${Clusterfy.currentLabel} OK`);
 };
 
 async function main() {
@@ -27,15 +38,19 @@ async function main() {
     const sarah = Clusterfy.fork('Sarah');
     const john = Clusterfy.fork('John', { revive: true });
     const michael = Clusterfy.fork('Michael');
-    Clusterfy.initAsPrimary();
 
-    Clusterfy.events.subscribe({
-      next: (event) => {
-        /* console.log(
-          `Primary got event ${event.type} (${event.data?.command}) from ${event.sender?.name} (${event.sender?.id}) to ${event.target?.name} (${event.target?.id})`
-        ); */
-      },
+    Clusterfy.initAsPrimary({
+      gracefulOnSignals: ['SIGINT', 'SIGTERM'],
     });
+    Clusterfy.registerShutdownMethod('default', onShutdown);
+
+    /* Clusterfy.events.subscribe({
+      next: (event) => {
+        console.log(
+          `Primary got event ${event.type} (${event.data?.command}) from ${event.sender?.name} (${event.sender?.id}) to ${event.target?.name} (${event.target?.id})`
+        );
+      },
+    });*/
 
     setTimeout(async () => {
       try {
@@ -54,33 +69,37 @@ async function main() {
         );
         await Clusterfy.runIPCCommand<number>('cy_get_timestamp', []);
 
-        /* console.log('Shutdown all gracefully...');
+        console.log('Shutdown all gracefully...');
         await Clusterfy.shutdownWorker(michael);
         await Clusterfy.shutdownWorker(paul);
         await Clusterfy.shutdownWorker(sarah);
         await Clusterfy.shutdownWorker(john);
-        */
+
         console.log(
           `Running workers: ${Clusterfy.getStatistics().workersOnline}`
         );
+        process.exit(0);
       } catch (e) {
         console.log(`!! ERROR from primary: ${e.message}\n${e.stack}\n----`);
       }
     }, 3000);
   } else {
-    await Clusterfy.initAsWorker();
-    console.log(`Worker ${Clusterfy.currentWorker.name}: I'm ready`);
+    await Clusterfy.initAsWorker({
+      gracefulOnSignals: ['SIGINT', 'SIGTERM'],
+    });
+    Clusterfy.registerShutdownMethod('default', onShutdown);
+    console.log(`Worker ${Clusterfy.currentLabel}: I'm ready`);
 
     Clusterfy.events.subscribe({
       next: (event: ClusterfyIPCEvent) => {
         if (event.type === 'result' && event?.data?.result !== undefined) {
           // output result to console
           console.log(
-            `Worker ${Clusterfy.currentWorker.name} (${Clusterfy.currentWorker.worker.id}): ${event?.data?.result?.data}`
+            `Worker ${Clusterfy.currentLabel}: ${event?.data?.result?.data}`
           );
         } else if (event.type !== 'command') {
           console.log(
-            ` -> Worker ${Clusterfy.currentWorker.name} (${Clusterfy.currentWorker.worker.id}) emitted event ${event.type}`
+            ` -> Worker ${Clusterfy.currentLabel} emitted event ${event.type}`
           );
         }
       },

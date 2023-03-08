@@ -11,6 +11,11 @@
     }
   ],
   "compilerOptions": {
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "paths": {
+      "clusterfy": [
+        "packages/clusterfy/src/index.ts"
+      ]
+    }
   }
 }

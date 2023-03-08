@@ -16,6 +16,7 @@ preview [here](https://github.com/julianpoemp/clusterfy/blob/main/packages/demo/
 - Easy way to add custom commands
 - Simple event handling using RxJS (e.g. using Observable)
 - Extended workers with more attributes like name and status
+- Graceful shutdown on process signals
 - ES Module with Typescript definitions
 
 # How it works
@@ -95,6 +96,10 @@ main();
 
 Returns current worker (only on worker). Returns undefined else.
 
+### currentLabel(): string
+
+Return "Primary" on primary or "Workername (id)" on worker.
+
 ### storage(): ClusterfyStorage<any>
 
 Returns shared storage (only on primary). Returns undefined else.
@@ -134,14 +139,24 @@ Creates a new worker with given name and options.
 </tr>
 </table>
 
-### initAsPrimary()
+### initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions)
 
-Initializes the primary with Clusterfy. This method must be called on primary (see example).
+Initializes the primary with Clusterfy. This method must be called on primary (see example). If you want to include
+graceful shutdown on process signals you need to add `shutdownOptions`.
 
-### async initAsWorker()
+### async initAsWorker(shutdownOptions?: ClusterfyShutdownOptions)
 
 Initializes the worker with Clusterfy and waits for metadata from primary. This method must be called on worker (see
-example). Wait until this method returns
+example). Wait until this method returns. If you want to include graceful shutdown on process signals you need to
+add `shutdownOptions`.
+
+### registerShutdownMethod(name: string, command: (signal: NodeJS.Signals) => Promise<void>)
+
+Registers a new method that is run on shutdown.
+
+### removeShutdownMethod(name: string)
+
+Removes an existing shutdown method.
 
 ### async saveToStorage(path: string, value: any)
 

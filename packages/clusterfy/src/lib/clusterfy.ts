@@ -4,6 +4,7 @@ import { Address } from 'cluster';
 import {
   ClusterfyCommandRequest,
   ClusterfyIPCEvent,
+  ClusterfyShutdownOptions,
   ClusterfyWorkerOptions,
   ClusterfyWorkerStatistics,
   ClusterfyWorkerStatus,
@@ -32,6 +33,14 @@ export class Clusterfy {
     return this._currentWorker;
   }
 
+  static get currentLabel(): string {
+    if (Clusterfy.isCurrentProcessPrimary()) {
+      return `Primary`;
+    } else {
+      return `${Clusterfy._currentWorker?.name} (${Clusterfy._currentWorker?.worker.id})`;
+    }
+  }
+
   static get storage(): ClusterfyStorage<unknown> {
     return this._storage;
   }
@@ -56,6 +65,12 @@ export class Clusterfy {
     cy_shutdown: new ClusterfyShutdownCommand(),
     cy_status_change: new ClusterfyStatusChangeCommand(),
   };
+
+  private static _shutdownRunning = false;
+  private static _shutdownCommands: {
+    command: (signal?: NodeJS.Signals) => Promise<void>;
+    name: string;
+  }[] = [];
 
   static initStorage<T>(storage: ClusterfyStorage<T>) {
     Clusterfy._storage = storage;
@@ -82,16 +97,21 @@ export class Clusterfy {
     worker.worker.on('listening', (address: Address) => {
       Clusterfy.onWorkerListening(worker, address);
     });
+
     return worker;
   }
 
-  static initAsPrimary() {
+  static initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions) {
     if (!cluster.isPrimary) {
       throw new Error(
         `Can't initialize clusterfy as primary. Current process is worker process.`
       );
     }
 
+    process.on('exit', () => {
+      Clusterfy.destroy();
+    });
+    Clusterfy.initShutdownRoutine(shutdownOptions);
     Clusterfy._events = new Subject<ClusterfyIPCEvent>();
 
     for (let i = 0; i < Clusterfy._workers.length; i++) {
@@ -102,7 +122,9 @@ export class Clusterfy {
     }
   }
 
-  static async initAsWorker(): Promise<void> {
+  static async initAsWorker(
+    shutdownOptions?: ClusterfyShutdownOptions
+  ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       if (cluster.isPrimary) {
         reject(
@@ -112,8 +134,12 @@ export class Clusterfy {
         );
       }
 
+      Clusterfy.initShutdownRoutine(shutdownOptions);
       this._events = new Subject<ClusterfyIPCEvent>();
 
+      process.on('exit', () => {
+        Clusterfy.destroy();
+      });
       process.on('message', (message: ClusterfyIPCEvent) => {
         Clusterfy.onMessageReceived(undefined, message);
       });
@@ -135,6 +161,14 @@ export class Clusterfy {
         },
       });
     });
+  }
+
+  static initShutdownRoutine(shutdownOptions?: ClusterfyShutdownOptions) {
+    if (shutdownOptions?.gracefulOnSignals) {
+      for (const signal of shutdownOptions.gracefulOnSignals) {
+        process.on(signal, Clusterfy.onShutdown);
+      }
+    }
   }
 
   /***
@@ -163,15 +197,24 @@ export class Clusterfy {
       };
 
       if (target.type === 'primary' || redirection) {
-        process.send(message, handle);
+        if (!Clusterfy.currentWorker?.worker.isDead()) {
+          process.send(message, handle);
+        } else {
+          handle(new Error(`Worker ${Clusterfy.currentWorker?.name} is dead.`));
+        }
       } else {
         // send to worker
         const sendMessage = (worker: _cluster.Worker) => {
-          if (worker) {
-            worker.send(message, handle);
-          } else {
+          if (!worker) {
             handle(new Error(`Error: Worker not found with id ${target.id}`));
           }
+          if (worker.isDead()) {
+            handle(
+              new Error(`Worker ${Clusterfy.currentWorker?.name} is dead.`)
+            );
+          }
+
+          worker.send(message, handle);
         };
 
         if (target?.id || target?.name) {
@@ -309,6 +352,12 @@ export class Clusterfy {
     args: Record<string, any>,
     commandEvent?: ClusterfyCommandRequest<any>
   ) => {
+    if (commandEvent.data?.command === Clusterfy._commands.cy_shutdown.name) {
+      args = {
+        commands: Clusterfy._shutdownCommands,
+      };
+    }
+
     const result = await commandObject.runOnTarget(args, commandEvent);
     this._events.next({
       timestamp: Date.now(),
@@ -409,10 +458,54 @@ export class Clusterfy {
     });
   };
 
+  private static onShutdown = (signal?: NodeJS.Signals) => {
+    if (Clusterfy._shutdownRunning) {
+      // shutdown already called, ignore this call
+      return;
+    }
+    Clusterfy._shutdownRunning = true;
+
+    const promises = [];
+    for (const shutdownCommand of Clusterfy._shutdownCommands) {
+      promises.push(shutdownCommand.command(signal));
+    }
+
+    Promise.all(promises).then(() => {
+      process.exit(0);
+    });
+  };
+
+  static registerShutdownMethod = (
+    name: string,
+    command: (signal: NodeJS.Signals) => Promise<void>
+  ) => {
+    const index = Clusterfy._shutdownCommands.findIndex((a) => a.name === name);
+
+    if (index < 0) {
+      this._shutdownCommands.push({
+        name,
+        command,
+      });
+    } else {
+      throw new Error(
+        `Can't add shutdown command. A command with this name already exists.`
+      );
+    }
+  };
+
+  static removeShutdownMethod = (name: string) => {
+    const index = Clusterfy._shutdownCommands.findIndex((a) => a.name === name);
+    if (index > -1) {
+      Clusterfy._shutdownCommands.splice(index, 1);
+    } else {
+      throw new Error(`Can't remove shutdown command. Not found.`);
+    }
+  };
+
   static async shutdownWorker(worker: ClusterfyWorker, timeout = 2000) {
     return new Promise<void>((resolve, reject) => {
       if (!this.isCurrentProcessPrimary()) {
-        reject(Error(`Only primary can shutdown workers`));
+        reject(new Error(`Only primary can shutdown workers`));
         return;
       }
 
@@ -629,14 +722,10 @@ export class Clusterfy {
       for (const { worker } of this._workers) {
         worker.removeAllListeners();
       }
+      process.removeAllListeners();
     } else {
       process.removeAllListeners();
     }
-  }
-
-  static exit(code = 0) {
-    this.destroy();
-    process.exit(code);
   }
 
   static isCurrentProcessPrimary() {
