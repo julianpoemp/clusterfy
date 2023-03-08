@@ -1,13 +1,13 @@
 {
   "name": "clusterfy",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "license": "MIT",
   "scripts": {
     "start:demo": "nx serve demo",
     "build:lib:prod": "nx build clusterfy -c production && cp LICENSE.txt dist/packages/clusterfy/LICENSE.txt && cp README.md dist/packages/clusterfy/README.md",
     "watch:lib": "nx build clusterfy --output-path node_modules/clusterfy --watch",
     "watch:lib:dist": "nx build clusterfy --output-path dist/packages/clusterfy --watch",
-    "changelog": "conventional-changelog -p angular -o CHANGELOG.md --verbose"
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s --append"
   },
   "private": true,
   "devDependencies": {
