@@ -98,7 +98,7 @@ Returns current worker (only on worker). Returns undefined else.
 
 ### currentLabel(): string
 
-Return "Primary" on primary or "Workername (id)" on worker.
+Returns "Primary" on primary or "Workername (id)" on worker.
 
 ### storage(): ClusterfyStorage<any>
 
@@ -197,10 +197,6 @@ Registers a new custom command to the list of supported commands. Call this meth
 ### changeCurrentWorkerStatus(status: ClusterfyWorkerStatus)
 
 Changes the status of the current worker and emits event of type "status" to itself and to primary.
-
-### exit(code = 0)
-
-Removes event listener of the current process and calls `process.exit(code)`.
 
 ## Create custom command
 

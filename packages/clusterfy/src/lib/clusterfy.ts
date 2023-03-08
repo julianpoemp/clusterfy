@@ -25,14 +25,16 @@ import {
 const cluster = _cluster as unknown as _cluster.Cluster;
 
 export class Clusterfy {
-  static set currentWorker(value: ClusterfyWorker) {
-    this._currentWorker = value;
-  }
-
-  static get currentWorker(): ClusterfyWorker {
+  /**
+   * returns the current worker. Undefined on primary.
+   */
+  static get currentWorker(): ClusterfyWorker | undefined {
     return this._currentWorker;
   }
 
+  /**
+   * Returns "Primary" on primary or "Workername (id)" on worker.
+   */
   static get currentLabel(): string {
     if (Clusterfy.isCurrentProcessPrimary()) {
       return `Primary`;
@@ -41,14 +43,23 @@ export class Clusterfy {
     }
   }
 
+  /**
+   * Returns shared storage (only on primary). Returns undefined else.
+   */
   static get storage(): ClusterfyStorage<unknown> {
     return this._storage;
   }
 
+  /**
+   * Returns observable of all events to this worker or primary.
+   */
   static get events(): Subject<ClusterfyIPCEvent> {
     return this._events;
   }
 
+  /**
+   * Returns array of workers (only on primary). Returns empty array else.
+   */
   static get workers(): ClusterfyWorker[] {
     return this._workers;
   }
@@ -72,10 +83,19 @@ export class Clusterfy {
     name: string;
   }[] = [];
 
+  /**
+   * Initializes the storage. Call this method on primary. The storage must be an object, e.g.
+   * @param storage
+   */
   static initStorage<T>(storage: ClusterfyStorage<T>) {
     Clusterfy._storage = storage;
   }
 
+  /**
+   * Creates a new worker with given name and options.
+   * @param name
+   * @param options
+   */
   static fork(
     name?: string,
     options?: ClusterfyWorkerOptions
@@ -101,6 +121,11 @@ export class Clusterfy {
     return worker;
   }
 
+  /**
+   * Initializes the primary with Clusterfy. This method must be called on primary (see example). If you want to include
+   * graceful shutdown on process signals you need to add `shutdownOptions`.
+   * @param shutdownOptions
+   */
   static initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions) {
     if (!cluster.isPrimary) {
       throw new Error(
@@ -122,6 +147,12 @@ export class Clusterfy {
     }
   }
 
+  /**
+   * Initializes the worker with Clusterfy and waits for metadata from primary. This method must be called on worker (see
+   * example). Wait until this method returns. If you want to include graceful shutdown on process signals you need to
+   * add `shutdownOptions`.
+   * @param shutdownOptions
+   */
   static async initAsWorker(
     shutdownOptions?: ClusterfyShutdownOptions
   ): Promise<void> {
@@ -151,7 +182,7 @@ export class Clusterfy {
             event.data.command === this._commands.cy_worker_set_metadata.name &&
             event.data?.result?.status === 'success'
           ) {
-            Clusterfy.currentWorker = new ClusterfyWorker(
+            Clusterfy._currentWorker = new ClusterfyWorker(
               cluster.worker,
               event.data?.result?.data?.name
             );
@@ -163,7 +194,9 @@ export class Clusterfy {
     });
   }
 
-  static initShutdownRoutine(shutdownOptions?: ClusterfyShutdownOptions) {
+  private static initShutdownRoutine(
+    shutdownOptions?: ClusterfyShutdownOptions
+  ) {
     if (shutdownOptions?.gracefulOnSignals) {
       for (const signal of shutdownOptions.gracefulOnSignals) {
         process.on(signal, Clusterfy.onShutdown);
@@ -475,6 +508,11 @@ export class Clusterfy {
     });
   };
 
+  /**
+   * Registers a new method that is run on shutdown.
+   * @param name
+   * @param command
+   */
   static registerShutdownMethod = (
     name: string,
     command: (signal: NodeJS.Signals) => Promise<void>
@@ -493,6 +531,10 @@ export class Clusterfy {
     }
   };
 
+  /**
+   * Removes an existing shutdown method.
+   * @param name
+   */
   static removeShutdownMethod = (name: string) => {
     const index = Clusterfy._shutdownCommands.findIndex((a) => a.name === name);
     if (index > -1) {
@@ -502,6 +544,18 @@ export class Clusterfy {
     }
   };
 
+  /**
+   * If you call `Clusterfy.shutdownWorker(worker, 2000)` from primary it sends a cy_shutdown command to a worker. The worker
+   * gets status "STOPPING" and should exit itself using `process.exit(0)` in 2 seconds (graceful shutdown). If the worker
+   * doesn't exit itself, the primary kill it.
+   *
+   * That means: the algorithm you are using for processing in a worker should check if the status is "STOPPING" using
+   * `Clusterfy.currentWorker.status` and then exit itself. The algorithm should also change the status to "
+   * PROCESSING" after it started processing and change itback to "IDLE" after finished. If a shutdown is received
+   * Clusterfy checks if the status is "IDLE" and calls `process.exit(0)` or changes the status to "STOPPING".
+   * @param worker
+   * @param timeout
+   */
   static async shutdownWorker(worker: ClusterfyWorker, timeout = 2000) {
     return new Promise<void>((resolve, reject) => {
       if (!this.isCurrentProcessPrimary()) {
@@ -544,6 +598,12 @@ export class Clusterfy {
     });
   }
 
+  /**
+   * Saves a serializable value to a path in the shared storage on primary. Path should be a string with dot notation to the
+   * attribute , e.g. "test.something". This method returns as soon as saved.
+   * @param path
+   * @param value
+   */
   static async saveToStorage(path: string, value: any): Promise<void> {
     return this.runIPCCommand<void>(this._commands.cy_storage_save.name, {
       path,
@@ -576,12 +636,20 @@ export class Clusterfy {
     });
   }
 
+  /**
+   * Returns a serializable value from a given path in shared storage. Path should be a string with dot notation to the
+   * attribute , e.g. "test.something". This method returns the value of type `T` as soon as retrieved.
+   * @param path
+   */
   static async retrieveFromStorage<T>(path: string): Promise<T> {
     return this.runIPCCommand<T>(this._commands.cy_storage_retrieve.name, {
       path,
     });
   }
 
+  /**
+   * Returns a object with statistics about the workers. Call it on primary.
+   */
   static getStatistics(): ClusterfyWorkerStatistics {
     if (!cluster.isPrimary) {
       throw new Error(
@@ -605,6 +673,9 @@ export class Clusterfy {
     return result;
   }
 
+  /**
+   * Outputs statistics from getStatistics to console. Call it on primary.
+   */
   static outputStatisticsTable() {
     if (Clusterfy.isCurrentProcessPrimary()) {
       const statistics = Clusterfy.getStatistics();
@@ -624,6 +695,10 @@ export class Clusterfy {
     }
   }
 
+  /**
+   * Registers a new custom command to the list of supported commands. Call this method on worker and primary.
+   * @param command
+   */
   static registerIPCCommand(command: ClusterfyCommand) {
     if (Object.keys(Clusterfy._commands).includes(command.name)) {
       throw new Error(`Command ${command.name} already exists`);
@@ -693,6 +768,10 @@ export class Clusterfy {
     }
   }
 
+  /**
+   * Changes the status of the current worker and emits event of type "status" to itself and to primary.
+   * @param newStatus
+   */
   static changeCurrentWorkerStatus(newStatus: ClusterfyWorkerStatus) {
     if (!this.isCurrentProcessPrimary()) {
       throw new Error(
