@@ -19,6 +19,10 @@ preview [here](https://github.com/julianpoemp/clusterfy/blob/main/packages/demo/
 - Graceful shutdown on process signals
 - ES Module with Typescript definitions
 
+# Applications
+
+You can use Clusterfy in all NodeJS applications with Node >= 16 and servers like ExpressJS or NestJS.
+
 # How it works
 
 The primary process is the manager who knows everything about the workers and controls these. Furthermore the primary
@@ -41,11 +45,20 @@ Furthermore, you need to install rxjs >= 7.5.0 and uuid >= 7.0.3 if not already 
 # Usage
 
 Clusterfy is a static class that can be called everywhere. At the entrypoint of your application you want to start the
-cluster.
-So you need to initiate the primary process and its workers like that:
+cluster. So you need to initiate the primary process and its workers like that:
 
 ````Typescript
 import {Clusterfy, ClusterfyIPCEvent, ClusterfyStorage} from 'clusterfy';
+
+const onShutdown = async () => {
+    console.log(`Simulate cleanup on shutdown for ${Clusterfy.currentLabel}...`);
+
+    let j = 0;
+    for (let i = 0; i < 100000; i++) {
+        j++;
+    }
+    console.log(`All cleaned up for ${Clusterfy.currentLabel} OK`);
+};
 
 async function main() {
     if (Clusterfy.isCurrentProcessPrimary()) {
@@ -62,17 +75,22 @@ async function main() {
         Clusterfy.fork();
         // now create worker that is revived automatically after it died
         Clusterfy.fork('EmailServer', {revive: true});
-        Clusterfy.initAsPrimary();
+        await Clusterfy.initAsPrimary({
+            gracefulOnSignals: ['SIGINT', 'SIGTERM'],
+        });
+        Clusterfy.registerShutdownMethod('default', onShutdown);
 
         // now you can use Clusterfy on primary as you like
-
         Clusterfy.events.subscribe({
             next: (event: ClusterfyIPCEvent) => {
                 console.log(`Primary got event ${event.type} from worker ${event.senderID}`);
             }
         });
     } else {
-        await Clusterfy.initAsWorker();
+        await Clusterfy.initAsWorker({
+            gracefulOnSignals: ['SIGINT', 'SIGTERM'],
+        });
+        Clusterfy.registerShutdownMethod('default', onShutdown);
         // worker retrieved metadata from primary on initialization
         console.log(`Worker ${Clusterfy.currentWorker.name} is ready.`);
 
@@ -104,7 +122,7 @@ Returns "Primary" on primary or "Workername (id)" on worker.
 
 Returns shared storage (only on primary). Returns undefined else.
 
-### events(): Subject<ClusterfyIPCEvent>
+### events(): Subject&lt;ClusterfyIPCEvent&gt;
 
 Returns observable of all events to this worker or primary.
 
@@ -114,7 +132,7 @@ Returns array of workers (only on primary). Returns empty array else.
 
 ## Functions
 
-### initStorage<T>(storage: ClusterfyStorage<T>)
+### initStorage&lt;T&gt;(storage: ClusterfyStorage<T>)
 
 Initializes the storage. Call this method on primary. The storage must be an object, e.g.
 
@@ -139,16 +157,16 @@ Creates a new worker with given name and options.
 </tr>
 </table>
 
-### initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions)
+### async initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions)
 
 Initializes the primary with Clusterfy. This method must be called on primary (see example). If you want to include
-graceful shutdown on process signals you need to add `shutdownOptions`.
+graceful shutdown on process signals you need to add `shutdownOptions`. Resolves as soon as all workers are ready.
 
 ### async initAsWorker(shutdownOptions?: ClusterfyShutdownOptions)
 
 Initializes the worker with Clusterfy and waits for metadata from primary. This method must be called on worker (see
 example). Wait until this method returns. If you want to include graceful shutdown on process signals you need to
-add `shutdownOptions`.
+add `shutdownOptions`. Resolves as soon as worker is ready.
 
 ### registerShutdownMethod(name: string, command: (signal: NodeJS.Signals) => Promise<void>)
 

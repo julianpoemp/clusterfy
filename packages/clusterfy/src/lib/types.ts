@@ -16,6 +16,7 @@ export interface ClusterfyIPCEvent {
   type:
     | 'command'
     | 'online'
+    | 'ready'
     | 'result'
     | 'disconnect'
     | 'error'

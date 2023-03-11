@@ -39,71 +39,64 @@ async function main() {
     const john = Clusterfy.fork('John', { revive: true });
     const michael = Clusterfy.fork('Michael');
 
-    Clusterfy.initAsPrimary({
+    await Clusterfy.initAsPrimary({
       gracefulOnSignals: ['SIGINT', 'SIGTERM'],
     });
     Clusterfy.registerShutdownMethod('default', onShutdown);
+    console.log(`Workers: We're ready`);
 
-    /* Clusterfy.events.subscribe({
-      next: (event) => {
-        console.log(
-          `Primary got event ${event.type} (${event.data?.command}) from ${event.sender?.name} (${event.sender?.id}) to ${event.target?.name} (${event.target?.id})`
-        );
-      },
-    });*/
+    try {
+      console.log('----\nPrimary: Paul, what is the current timestamp?');
+      await Clusterfy.runIPCCommand<number>('cy_get_timestamp', [], {
+        name: 'Paul',
+      });
+      await wait(3000);
+      console.log(`----\nPrimary: OK, now Sarah what is the timestamp?`);
+      await Clusterfy.runIPCCommand<number>('cy_get_timestamp', [], {
+        name: 'Sarah',
+      });
+      await wait(3000);
+      console.log(
+        `----\nPrimary: OK. Now to all workers: what is the timestamp?`
+      );
+      await Clusterfy.runIPCCommand<number>('cy_get_timestamp', []);
 
-    setTimeout(async () => {
-      try {
-        console.log('----\nPrimary: Paul, what is the current timestamp?');
-        await Clusterfy.runIPCCommand<number>('cy_get_timestamp', [], {
-          name: 'Paul',
-        });
-        await wait(3000);
-        console.log(`----\nPrimary: OK, now Sarah what is the timestamp?`);
-        await Clusterfy.runIPCCommand<number>('cy_get_timestamp', [], {
-          name: 'Sarah',
-        });
-        await wait(3000);
-        console.log(
-          `----\nPrimary: OK. Now to all workers: what is the timestamp?`
-        );
-        await Clusterfy.runIPCCommand<number>('cy_get_timestamp', []);
+      await wait(10000);
+      console.log('----\nPrimary: Shutdown all gracefully...');
+      await Clusterfy.shutdownWorker(michael);
+      await Clusterfy.shutdownWorker(paul);
+      await Clusterfy.shutdownWorker(sarah);
+      await Clusterfy.shutdownWorker(john);
 
-        console.log('Shutdown all gracefully...');
-        await Clusterfy.shutdownWorker(michael);
-        await Clusterfy.shutdownWorker(paul);
-        await Clusterfy.shutdownWorker(sarah);
-        await Clusterfy.shutdownWorker(john);
-
-        console.log(
-          `Running workers: ${Clusterfy.getStatistics().workersOnline}`
-        );
-        process.exit(0);
-      } catch (e) {
-        console.log(`!! ERROR from primary: ${e.message}\n${e.stack}\n----`);
-      }
-    }, 3000);
+      console.log(
+        `Running workers: ${Clusterfy.getStatistics().workersOnline}`
+      );
+      process.exit(0);
+    } catch (e) {
+      console.log(`!! ERROR from primary: ${e.message}\n${e.stack}\n----`);
+    }
   } else {
+    Clusterfy.events.subscribe({
+      next: (event: ClusterfyIPCEvent) => {
+        if (Clusterfy.currentWorker?.name) {
+          if (event.type === 'result' && event?.data?.result !== undefined) {
+            // output result to console
+            console.log(
+              `Worker ${Clusterfy.currentLabel}: ${event?.data?.result?.data}`
+            );
+          } else if (event.type !== 'command') {
+            console.log(
+              ` -> Worker ${Clusterfy.currentLabel} emitted event ${event.type}`
+            );
+          }
+        }
+      },
+    });
+
     await Clusterfy.initAsWorker({
       gracefulOnSignals: ['SIGINT', 'SIGTERM'],
     });
     Clusterfy.registerShutdownMethod('default', onShutdown);
-    console.log(`Worker ${Clusterfy.currentLabel}: I'm ready`);
-
-    Clusterfy.events.subscribe({
-      next: (event: ClusterfyIPCEvent) => {
-        if (event.type === 'result' && event?.data?.result !== undefined) {
-          // output result to console
-          console.log(
-            `Worker ${Clusterfy.currentLabel}: ${event?.data?.result?.data}`
-          );
-        } else if (event.type !== 'command') {
-          console.log(
-            ` -> Worker ${Clusterfy.currentLabel} emitted event ${event.type}`
-          );
-        }
-      },
-    });
 
     if (Clusterfy.currentWorker.name === 'Paul') {
       await wait(10000);

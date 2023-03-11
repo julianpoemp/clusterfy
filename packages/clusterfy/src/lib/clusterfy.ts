@@ -66,7 +66,8 @@ export class Clusterfy {
 
   private static _workers: ClusterfyWorker[] = [];
   private static _storage: ClusterfyStorage<unknown>;
-  private static _events: Subject<ClusterfyIPCEvent>;
+  private static _events: Subject<ClusterfyIPCEvent> =
+    new Subject<ClusterfyIPCEvent>();
   private static _currentWorker: ClusterfyWorker;
   private static _commands: ClusterfyIPCCommands = {
     cy_storage_save: new ClusterfyStorageSaveCommand(),
@@ -117,6 +118,9 @@ export class Clusterfy {
     worker.worker.on('listening', (address: Address) => {
       Clusterfy.onWorkerListening(worker, address);
     });
+    worker.worker.on('message', (message) => {
+      Clusterfy.onMessageReceived(worker, message);
+    });
 
     return worker;
   }
@@ -126,7 +130,7 @@ export class Clusterfy {
    * graceful shutdown on process signals you need to add `shutdownOptions`.
    * @param shutdownOptions
    */
-  static initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions) {
+  static async initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions) {
     if (!cluster.isPrimary) {
       throw new Error(
         `Can't initialize clusterfy as primary. Current process is worker process.`
@@ -136,15 +140,28 @@ export class Clusterfy {
     process.on('exit', () => {
       Clusterfy.destroy();
     });
-    Clusterfy.initShutdownRoutine(shutdownOptions);
-    Clusterfy._events = new Subject<ClusterfyIPCEvent>();
 
-    for (let i = 0; i < Clusterfy._workers.length; i++) {
-      const worker = Clusterfy._workers[i];
-      worker.worker.on('message', (message) => {
-        Clusterfy.onMessageReceived(worker, message);
-      });
+    Clusterfy.initShutdownRoutine(shutdownOptions);
+
+    const promises = [];
+    for (const worker of this._workers) {
+      promises.push(this.waitUntilWorkerOnline(worker.worker));
     }
+
+    return Promise.all(promises);
+  }
+
+  static async waitUntilWorkerOnline(worker: _cluster.Worker) {
+    return new Promise<void>((resolve, reject) => {
+      const subscription = Clusterfy._events.subscribe({
+        next: (event) => {
+          if (event.type === 'ready' && event.sender.id === worker.id) {
+            subscription.unsubscribe();
+          }
+          resolve();
+        },
+      });
+    });
   }
 
   /**
@@ -166,7 +183,6 @@ export class Clusterfy {
       }
 
       Clusterfy.initShutdownRoutine(shutdownOptions);
-      this._events = new Subject<ClusterfyIPCEvent>();
 
       process.on('exit', () => {
         Clusterfy.destroy();
@@ -186,6 +202,26 @@ export class Clusterfy {
               cluster.worker,
               event.data?.result?.data?.name
             );
+
+            Clusterfy.sendMessage(
+              {
+                type: 'primary',
+              },
+              {
+                type: 'ready',
+                timestamp: Date.now(),
+                sender: {
+                  id: Clusterfy._currentWorker?.worker?.id,
+                  name: Clusterfy._currentWorker?.name,
+                },
+              }
+            );
+
+            this._events.next({
+              type: 'ready',
+              timestamp: Date.now(),
+            });
+
             subscr.unsubscribe();
             resolve();
           }
