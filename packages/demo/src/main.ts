@@ -13,13 +13,13 @@ const wait = async (time: number) => {
 };
 
 const onShutdown = async () => {
-  console.log(`Simulate cleanup on shutdown for ${Clusterfy.currentLabel}...`);
+  console.log(`${Clusterfy.currentLabel}: Simulate cleanup on shutdown...`);
 
   let j = 0;
   for (let i = 0; i < 100000; i++) {
     j++;
   }
-  console.log(`All cleaned up for ${Clusterfy.currentLabel} OK`);
+  console.log(`${Clusterfy.currentLabel}: All cleaned up.`);
 };
 
 async function main() {
@@ -32,7 +32,9 @@ async function main() {
     Clusterfy.initStorage(sharedMemory);
 
     console.log('Start Clusterfy demo...');
-    console.log('Primary: Hi workers! Are you ready?');
+    console.log(
+      `${Clusterfy.currentLabel}: Create Workers Paul, Sarah, John, Michael...`
+    );
 
     const paul = Clusterfy.fork('Paul');
     const sarah = Clusterfy.fork('Sarah');
@@ -43,21 +45,25 @@ async function main() {
       gracefulOnSignals: ['SIGINT', 'SIGTERM'],
     });
     Clusterfy.registerShutdownMethod('default', onShutdown);
-    console.log(`Workers: We're ready`);
+    console.log(`${Clusterfy.currentLabel}: Worker created.`);
 
     try {
-      console.log('----\nPrimary: Paul, what is the current timestamp?');
+      console.log(
+        `----\n${Clusterfy.currentLabel}: Paul, what is the current timestamp?`
+      );
       await Clusterfy.runIPCCommand<number>('cy_get_timestamp', [], {
         name: 'Paul',
       });
       await wait(3000);
-      console.log(`----\nPrimary: OK, now Sarah what is the timestamp?`);
+      console.log(
+        `----\n${Clusterfy.currentLabel}: OK, now Sarah what is the timestamp?`
+      );
       await Clusterfy.runIPCCommand<number>('cy_get_timestamp', [], {
         name: 'Sarah',
       });
       await wait(3000);
       console.log(
-        `----\nPrimary: OK. Now to all workers: what is the timestamp?`
+        `----\n${Clusterfy.currentLabel}: OK. Now to all workers: what is the timestamp?`
       );
       await Clusterfy.runIPCCommand<number>('cy_get_timestamp', []);
 
@@ -82,11 +88,11 @@ async function main() {
           if (event.type === 'result' && event?.data?.result !== undefined) {
             // output result to console
             console.log(
-              `Worker ${Clusterfy.currentLabel}: ${event?.data?.result?.data}`
+              `${Clusterfy.currentLabel}: ${event?.data?.result?.data}`
             );
-          } else if (event.type !== 'command') {
+          } else if (!['command', 'ready'].includes(event.type)) {
             console.log(
-              ` -> Worker ${Clusterfy.currentLabel} emitted event ${event.type}`
+              ` -> ${Clusterfy.currentLabel} emitted event ${event.type}`
             );
           }
         }
@@ -102,7 +108,7 @@ async function main() {
       await wait(10000);
 
       console.log(
-        `----\nWorker Paul: Hey Sarah, what is the current timestamp?`
+        `----\n${Clusterfy.currentLabel}: Hey Sarah, what is the current timestamp?`
       );
       Clusterfy.runIPCCommand('cy_get_timestamp', undefined, {
         name: 'Sarah',
@@ -111,11 +117,11 @@ async function main() {
       await wait(1000);
 
       console.log(
-        `----\nWorker Paul: Hey Primary, please save "Hello World!" to attribute "test" in shared storage.`
+        `----\n${Clusterfy.currentLabel}: Hey Primary, please save "Hello World!" to attribute "test" in shared storage.`
       );
       await Clusterfy.saveToStorage('test', 'Hello World!');
       console.log(
-        `----\nWorker Paul: No error returned, that's good. Can you please show me the value?`
+        `----\n${Clusterfy.currentLabel}: No error returned, that's good. Can you please show me the value?`
       );
       const result = await Clusterfy.retrieveFromStorage<string>('test');
       console.log(`Primary: ${result}`);
@@ -124,7 +130,7 @@ async function main() {
       await wait(13000);
 
       console.log(
-        `----\nWorker Sarah: After waiting 13 seconds, Primary can you please show me value of test in shared memory?`
+        `----\n${Clusterfy.currentLabel}: After waiting 13 seconds, Primary can you please show me value of test in shared memory?`
       );
       const result = await Clusterfy.runIPCCommand('cy_storage_retrieve', {
         path: 'test',
