@@ -809,7 +809,7 @@ export class Clusterfy {
    * @param newStatus
    */
   static changeCurrentWorkerStatus(newStatus: ClusterfyWorkerStatus) {
-    if (!this.isCurrentProcessPrimary()) {
+    if (this.isCurrentProcessPrimary()) {
       throw new Error(
         `changeCurrentWorkerStatus must be called on worker process.`
       );
