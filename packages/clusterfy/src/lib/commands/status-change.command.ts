@@ -14,7 +14,13 @@ export class ClusterfyStatusChangeCommand extends ClusterfyCommand {
   }
 
   runOnTarget = async (
-    { newStatus }: { newStatus: ClusterfyWorkerStatus },
+    {
+      oldStatus,
+      newStatus,
+    }: {
+      oldStatus: ClusterfyWorkerStatus;
+      newStatus: ClusterfyWorkerStatus;
+    },
     commandEvent?: ClusterfyCommandRequest<{
       oldStatus: ClusterfyWorkerStatus;
       newStatus: ClusterfyWorkerStatus;
@@ -27,7 +33,7 @@ export class ClusterfyStatusChangeCommand extends ClusterfyCommand {
 
       if (index > -1) {
         const data = {
-          oldStatus: Clusterfy.workers[index].status,
+          oldStatus,
           newStatus,
         };
         Clusterfy.workers[index].changeStatus(newStatus);

@@ -145,22 +145,29 @@ export class Clusterfy {
 
     const promises = [];
     for (const worker of this._workers) {
-      promises.push(this.waitUntilWorkerOnline(worker.worker));
+      promises.push(this.waitUntilWorkerOnline(worker));
     }
 
     return Promise.all(promises);
   }
 
-  static async waitUntilWorkerOnline(worker: _cluster.Worker) {
+  static async waitUntilWorkerOnline(worker: ClusterfyWorker) {
     return new Promise<void>((resolve, reject) => {
-      const subscription = Clusterfy._events.subscribe({
-        next: (event) => {
-          if (event.type === 'ready' && event.sender.id === worker.id) {
-            subscription.unsubscribe();
-          }
-          resolve();
-        },
-      });
+      if (worker.status !== ClusterfyWorkerStatus.INITIALIZING) {
+        resolve();
+      } else {
+        const subscription = Clusterfy._events.subscribe({
+          next: (event) => {
+            if (
+              event.type === 'ready' &&
+              event.sender.id === worker.worker.id
+            ) {
+              subscription.unsubscribe();
+            }
+            resolve();
+          },
+        });
+      }
     });
   }
 
@@ -221,6 +228,7 @@ export class Clusterfy {
               type: 'ready',
               timestamp: Date.now(),
             });
+            Clusterfy.changeCurrentWorkerStatus(ClusterfyWorkerStatus.IDLE);
 
             subscr.unsubscribe();
             resolve();
@@ -414,7 +422,18 @@ export class Clusterfy {
       }
     }
 
-    Clusterfy._events.next(message);
+    if (
+      message.type === 'command' &&
+      message.data?.command === 'cy_status_change'
+    ) {
+      Clusterfy._events.next({
+        ...message,
+        type: 'status',
+        data: message?.data?.args,
+      });
+    } else {
+      Clusterfy._events.next(message);
+    }
   };
   private static runOnTarget = async (
     commandObject: ClusterfyCommand,
@@ -827,9 +846,7 @@ export class Clusterfy {
       timestamp: Date.now(),
     });
 
-    this.runIPCCommand<void>(this._commands.cy_status_change.name, {
-      newStatus,
-    });
+    this.runIPCCommand<void>(this._commands.cy_status_change.name, data);
   }
 
   private static destroy() {
@@ -968,7 +985,7 @@ export class ClusterfyWorker {
   }
 
   private _worker: _cluster.Worker;
-  private _status: ClusterfyWorkerStatus = ClusterfyWorkerStatus.IDLE;
+  private _status: ClusterfyWorkerStatus = ClusterfyWorkerStatus.INITIALIZING;
   private _name: string;
 
   private _options: ClusterfyWorkerOptions = {

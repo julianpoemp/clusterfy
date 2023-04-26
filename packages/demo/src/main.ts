@@ -92,7 +92,7 @@ async function main() {
             );
           } else if (!['command', 'ready'].includes(event.type)) {
             console.log(
-              ` -> ${Clusterfy.currentLabel} emitted event ${event.type}`
+              ` -> ${Clusterfy.currentLabel} changed his/her status from ${event.data?.oldStatus} to ${event.data?.newStatus}`
             );
           }
         }
