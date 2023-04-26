@@ -19,5 +19,14 @@
 * **core:** new event triggered "ready" as soon as worker is online and got
   meta_data ([ddb9af1](https://github.com/julianpoemp/clusterfy/commit/ddb9af1844ac7e01080b77b81cfdddcc68e4d55f))
 
+## [1.1.1](https://github.com/julianpoemp/clusterfy/compare/v1.1.0...v1.1.1) (2023-04-26)
+
+### Bug Fixes
+
+* **core:** event of type status is not sent correctly and waitUntilWorkerOnline does not trigger
+  correctly ([4d0adaf](https://github.com/julianpoemp/clusterfy/commit/4d0adafa28384590f0a62e9bfd32d1b5a5cd9ac0))
+* **core:** invalid primary process check in
+  changeCurrentWorkerStatus() ([96a228a](https://github.com/julianpoemp/clusterfy/commit/96a228af71485f2d0041e8579e0d35c7488e7ec7))
+
 
 
