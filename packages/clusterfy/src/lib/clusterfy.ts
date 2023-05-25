@@ -10,7 +10,7 @@ import {
   ClusterfyWorkerStatus,
 } from './types';
 import { Subject, Subscription, timer } from 'rxjs';
-import { v4 as UUIDv4 } from 'UUID';
+import { v4 as UUIDv4 } from 'uuid';
 import {
   ClusterfyCommand,
   ClusterfyIPCCommands,
