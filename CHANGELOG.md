@@ -28,5 +28,7 @@
 * **core:** invalid primary process check in
   changeCurrentWorkerStatus() ([96a228a](https://github.com/julianpoemp/clusterfy/commit/96a228af71485f2d0041e8579e0d35c7488e7ec7))
 
+## [1.1.2](https://github.com/julianpoemp/clusterfy/compare/v1.1.1...v1.1.2) (2023-05-25)
+
 
 
