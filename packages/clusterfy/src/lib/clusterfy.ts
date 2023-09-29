@@ -145,22 +145,31 @@ export class Clusterfy {
 
     const promises = [];
     for (const worker of this._workers) {
-      promises.push(this.waitUntilWorkerOnline(worker));
+      promises.push(
+        this.waitForStatus(worker, [
+          ClusterfyWorkerStatus.IDLE,
+          ClusterfyWorkerStatus.PROCESSING,
+        ])
+      );
     }
 
     return Promise.all(promises);
   }
 
-  static async waitUntilWorkerOnline(worker: ClusterfyWorker) {
+  static async waitForStatus(
+    worker: ClusterfyWorker,
+    status: ClusterfyWorkerStatus[]
+  ) {
     return new Promise<void>((resolve, reject) => {
-      if (worker.status !== ClusterfyWorkerStatus.INITIALIZING) {
+      if (status.includes(worker.status)) {
         resolve();
       } else {
         const subscription = Clusterfy._events.subscribe({
           next: (event) => {
             if (
-              event.type === 'ready' &&
-              event.sender.id === worker.worker.id
+              event.type === 'status' &&
+              event.sender.id === worker.worker.id &&
+              status.includes(event.data.newStatus)
             ) {
               subscription.unsubscribe();
             }
@@ -198,6 +207,7 @@ export class Clusterfy {
         Clusterfy.onMessageReceived(undefined, message);
       });
 
+      Clusterfy._currentWorker = new ClusterfyWorker(cluster.worker);
       const subscr = this._events.subscribe({
         next: (event) => {
           if (
@@ -205,10 +215,7 @@ export class Clusterfy {
             event.data.command === this._commands.cy_worker_set_metadata.name &&
             event.data?.result?.status === 'success'
           ) {
-            Clusterfy._currentWorker = new ClusterfyWorker(
-              cluster.worker,
-              event.data?.result?.data?.name
-            );
+            Clusterfy._currentWorker.name = event.data?.result?.data?.name;
 
             Clusterfy.sendMessage(
               {
@@ -235,6 +242,7 @@ export class Clusterfy {
           }
         },
       });
+      Clusterfy.changeCurrentWorkerStatus(ClusterfyWorkerStatus.LOADED);
     });
   }
 
@@ -458,7 +466,11 @@ export class Clusterfy {
     return result;
   };
 
-  private static onWorkerOnline = (worker: ClusterfyWorker, name?: string) => {
+  private static onWorkerOnline = async (
+    worker: ClusterfyWorker,
+    name?: string
+  ) => {
+    await this.waitForStatus(worker, [ClusterfyWorkerStatus.LOADED]);
     Clusterfy.runIPCCommand<void>(
       this._commands.cy_worker_set_metadata.name,
       { name },

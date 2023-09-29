@@ -63,6 +63,7 @@ export interface ClusterfyWorkerStatistics {
 export enum ClusterfyWorkerStatus {
   // worker is online and does nothing
   'INITIALIZING' = 'INITIALIZING',
+  'LOADED' = 'LOADED',
   'IDLE' = 'IDLE',
   'PROCESSING' = 'PROCESSING',
   'STOPPING' = 'STOPPING',
