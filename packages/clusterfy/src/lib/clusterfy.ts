@@ -263,7 +263,6 @@ export class Clusterfy {
         }
       }
 
-      console.log(cluster.worker);
       Clusterfy._currentWorker = new ClusterfyWorker(
         cluster.worker,
         method,

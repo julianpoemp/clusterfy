@@ -41,9 +41,11 @@ async function main() {
     );
 
     const paul = Clusterfy.fork('Paul');
+    /*
     const sarah = Clusterfy.fork('Sarah');
     const john = Clusterfy.fork('John', { revive: true });
     const michael = Clusterfy.fork('Michael');
+    */
 
     await Clusterfy.initAsPrimary({
       shutdown: {
@@ -61,6 +63,7 @@ async function main() {
       await Clusterfy.runIPCCommand<number>('cy_get_timestamp', [], {
         name: 'Paul',
       });
+      /*
       await wait(3000);
       console.log(
         `----\n${Clusterfy.currentLabel}: OK, now Sarah what is the timestamp?`
@@ -80,7 +83,7 @@ async function main() {
       await Clusterfy.shutdownWorker(paul);
       await Clusterfy.shutdownWorker(sarah);
       await Clusterfy.shutdownWorker(john);
-
+*/
       console.log(
         `Running workers: ${Clusterfy.getStatistics().workersOnline}`
       );
