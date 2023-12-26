@@ -15,10 +15,6 @@
         "assets": ["packages/clusterfy/*.md"]
       }
     },
-    "publish": {
-      "command": "node tools/scripts/publish.mjs clusterfy {args.ver} {args.tag}",
-      "dependsOn": ["build"]
-    },
     "lint": {
       "executor": "@nx/eslint:lint",
       "outputs": ["{options.outputFile}"]

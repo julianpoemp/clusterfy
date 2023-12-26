@@ -1,8 +1,8 @@
 {
   "run": {
-    "command": "nx build clusterfy",
-    "startTime": "2023-12-26T08:16:26.267Z",
-    "endTime": "2023-12-26T08:16:27.112Z",
+    "command": "nx build demo",
+    "startTime": "2023-12-26T08:49:23.926Z",
+    "endTime": "2023-12-26T08:49:24.745Z",
     "inner": false
   },
   "tasks": [
@@ -10,9 +10,20 @@
       "taskId": "clusterfy:build",
       "target": "build",
       "projectName": "clusterfy",
-      "hash": "18411273063523080149",
-      "startTime": "2023-12-26T08:16:26.271Z",
-      "endTime": "2023-12-26T08:16:27.111Z",
+      "hash": "7965432302454083644",
+      "startTime": "2023-12-26T08:49:23.930Z",
+      "endTime": "2023-12-26T08:49:23.949Z",
+      "params": "",
+      "cacheStatus": "local-cache-hit",
+      "status": 0
+    },
+    {
+      "taskId": "demo:build:production",
+      "target": "build",
+      "projectName": "demo",
+      "hash": "10620691227184705602",
+      "startTime": "2023-12-26T08:49:23.952Z",
+      "endTime": "2023-12-26T08:49:24.745Z",
       "params": "",
       "cacheStatus": "cache-miss",
       "status": 0

@@ -28,8 +28,7 @@
     "prettier": "^2.6.2",
     "ts-jest": "^29.1.0",
     "ts-node": "10.9.1",
-    "typescript": "~5.2.2",
-    "verdaccio": "^5.0.4"
+    "typescript": "~5.2.2"
   },
   "pathMappings": {
     "clusterfy": [
@@ -38,202 +37,73 @@
   },
   "nxJsonPlugins": [],
   "fileMap": {
-    "nonProjectFiles": [],
+    "nonProjectFiles": [
+      {
+        "file": ".eslintignore",
+        "hash": "7663861978715868291"
+      },
+      {
+        "file": ".gitignore",
+        "hash": "11608181557323256120"
+      },
+      {
+        "file": ".vscode/extensions.json",
+        "hash": "235626400633494639"
+      },
+      {
+        "file": ".nx/cache/d/server-process.json",
+        "hash": "9862037631274493984"
+      },
+      {
+        "file": ".prettierrc",
+        "hash": "16267754514737964994"
+      },
+      {
+        "file": "jest.preset.js",
+        "hash": "9430166341120122740"
+      },
+      {
+        "file": ".editorconfig",
+        "hash": "5443105041930014821"
+      },
+      {
+        "file": "package.json",
+        "hash": "11893204205723086682"
+      },
+      {
+        "file": ".prettierignore",
+        "hash": "16448050467312557263"
+      },
+      {
+        "file": "README.md",
+        "hash": "14484871548223736660"
+      },
+      {
+        "file": "jest.config.ts",
+        "hash": "12333515226966617182"
+      },
+      {
+        "file": ".eslintrc.json",
+        "hash": "18315524891129148814"
+      },
+      {
+        "file": "tsconfig.base.json",
+        "hash": "16127100624768569883"
+      },
+      {
+        "file": "nx.json",
+        "hash": "13541423423595000305"
+      },
+      {
+        "file": "package-lock.json",
+        "hash": "1852786114004447114"
+      }
+    ],
     "projectFileMap": {
-      "demo-e2e": [
-        {
-          "file": "apps/demo-e2e/.eslintrc.json",
-          "hash": "13800677001662881425"
-        },
-        {
-          "file": "apps/demo-e2e/jest.config.ts",
-          "hash": "17966758441340444674"
-        },
-        {
-          "file": "apps/demo-e2e/project.json",
-          "hash": "1534489517928321037"
-        },
-        {
-          "file": "apps/demo-e2e/src/demo/demo.spec.ts",
-          "hash": "4921700302217889162",
-          "deps": [
-            "npm:child_process",
-            "npm:path"
-          ]
-        },
-        {
-          "file": "apps/demo-e2e/src/test-setup.ts",
-          "hash": "12277343883897675151"
-        },
-        {
-          "file": "apps/demo-e2e/tsconfig.json",
-          "hash": "15443990093475294480"
-        },
-        {
-          "file": "apps/demo-e2e/tsconfig.spec.json",
-          "hash": "14384658316786387328"
-        }
-      ],
-      "@clusterfy2/source": [
-        {
-          "file": ".editorconfig",
-          "hash": "5443105041930014821"
-        },
-        {
-          "file": ".eslintignore",
-          "hash": "7663861978715868291"
-        },
-        {
-          "file": ".eslintrc.json",
-          "hash": "18315524891129148814"
-        },
-        {
-          "file": ".gitignore",
-          "hash": "16877376182141465221"
-        },
-        {
-          "file": ".prettierignore",
-          "hash": "16448050467312557263"
-        },
-        {
-          "file": ".prettierrc",
-          "hash": "16267754514737964994"
-        },
-        {
-          "file": ".verdaccio/config.yml",
-          "hash": "14993594506392938393"
-        },
-        {
-          "file": ".vscode/extensions.json",
-          "hash": "235626400633494639"
-        },
-        {
-          "file": "README.md",
-          "hash": "14484871548223736660"
-        },
-        {
-          "file": "jest.config.ts",
-          "hash": "12333515226966617182",
-          "deps": [
-            "npm:@nx/jest"
-          ]
-        },
-        {
-          "file": "jest.preset.js",
-          "hash": "9430166341120122740",
-          "deps": [
-            "npm:@nx/jest"
-          ]
-        },
-        {
-          "file": "nx.json",
-          "hash": "13541423423595000305"
-        },
-        {
-          "file": "package-lock.json",
-          "hash": "3421177255831889023"
-        },
-        {
-          "file": "package.json",
-          "hash": "7542376559027684846",
-          "deps": [
-            "npm:axios",
-            "npm:rxjs",
-            "npm:uuid",
-            "npm:tslib",
-            "npm:@nx/esbuild",
-            "npm:@nx/eslint",
-            "npm:@nx/eslint-plugin",
-            "npm:@nx/jest",
-            "npm:@nx/js",
-            "npm:@nx/node",
-            "npm:@nx/workspace",
-            "npm:@swc-node/register",
-            "npm:@swc/core",
-            "npm:@types/jest",
-            "npm:@types/node",
-            "npm:@typescript-eslint/eslint-plugin",
-            "npm:@typescript-eslint/parser",
-            "npm:esbuild",
-            "npm:eslint",
-            "npm:eslint-config-prettier",
-            "npm:jest",
-            "npm:jest-environment-node",
-            "npm:nx",
-            "npm:prettier",
-            "npm:ts-jest",
-            "npm:ts-node",
-            "npm:typescript",
-            "npm:verdaccio"
-          ]
-        },
-        {
-          "file": "project.json",
-          "hash": "9232613256329964656"
-        },
-        {
-          "file": "tools/scripts/publish.mjs",
-          "hash": "8455829797866792111",
-          "deps": [
-            "npm:child_process",
-            "npm:fs",
-            "npm:@nx/devkit"
-          ]
-        },
-        {
-          "file": "tsconfig.base.json",
-          "hash": "16127100624768569883"
-        }
-      ],
-      "demo": [
-        {
-          "file": "apps/demo/.eslintrc.json",
-          "hash": "13800677001662881425"
-        },
-        {
-          "file": "apps/demo/jest.config.ts",
-          "hash": "4898903920120913823"
-        },
-        {
-          "file": "apps/demo/project.json",
-          "hash": "16092540006297133839"
-        },
-        {
-          "file": "apps/demo/src/assets/.gitkeep",
-          "hash": "3244421341483603138"
-        },
-        {
-          "file": "apps/demo/src/main.ts",
-          "hash": "1091842603594732357",
-          "deps": [
-            "clusterfy",
-            "npm:cluster"
-          ]
-        },
-        {
-          "file": "apps/demo/src/socket-client.mjs",
-          "hash": "55731724051908842",
-          "deps": [
-            "clusterfy"
-          ]
-        },
-        {
-          "file": "apps/demo/tsconfig.app.json",
-          "hash": "1558509971940032459"
-        },
-        {
-          "file": "apps/demo/tsconfig.json",
-          "hash": "3490524966360018312"
-        },
-        {
-          "file": "apps/demo/tsconfig.spec.json",
-          "hash": "11550347367511341917"
-        }
-      ],
       "clusterfy": [
         {
           "file": "packages/clusterfy/.eslintrc.json",
-          "hash": "13365499647183331872"
+          "hash": "16896711999632553762"
         },
         {
           "file": "packages/clusterfy/README.md",
@@ -241,15 +111,18 @@
         },
         {
           "file": "packages/clusterfy/jest.config.ts",
-          "hash": "16830272047215455083"
+          "hash": "6282728755015448683"
         },
         {
           "file": "packages/clusterfy/package.json",
-          "hash": "3381565900773391559"
+          "hash": "5713311704749216596",
+          "deps": [
+            "npm:tslib"
+          ]
         },
         {
           "file": "packages/clusterfy/project.json",
-          "hash": "16968909735680160735"
+          "hash": "9084140146444944177"
         },
         {
           "file": "packages/clusterfy/src/index.ts",
@@ -319,11 +192,90 @@
         },
         {
           "file": "packages/clusterfy/tsconfig.lib.json",
-          "hash": "9784412502124584040"
+          "hash": "8188472110264778699"
         },
         {
           "file": "packages/clusterfy/tsconfig.spec.json",
-          "hash": "17313551537729802733"
+          "hash": "11550347367511341917"
+        }
+      ],
+      "demo": [
+        {
+          "file": "apps/demo/.eslintrc.json",
+          "hash": "13800677001662881425"
+        },
+        {
+          "file": "apps/demo/jest.config.ts",
+          "hash": "4898903920120913823"
+        },
+        {
+          "file": "apps/demo/project.json",
+          "hash": "16092540006297133839"
+        },
+        {
+          "file": "apps/demo/src/assets/.gitkeep",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/demo/src/main.ts",
+          "hash": "1091842603594732357",
+          "deps": [
+            "clusterfy",
+            "npm:cluster"
+          ]
+        },
+        {
+          "file": "apps/demo/src/socket-client.mjs",
+          "hash": "55731724051908842",
+          "deps": [
+            "clusterfy"
+          ]
+        },
+        {
+          "file": "apps/demo/tsconfig.app.json",
+          "hash": "1558509971940032459"
+        },
+        {
+          "file": "apps/demo/tsconfig.json",
+          "hash": "3490524966360018312"
+        },
+        {
+          "file": "apps/demo/tsconfig.spec.json",
+          "hash": "11550347367511341917"
+        }
+      ],
+      "demo-e2e": [
+        {
+          "file": "apps/demo-e2e/.eslintrc.json",
+          "hash": "13800677001662881425"
+        },
+        {
+          "file": "apps/demo-e2e/jest.config.ts",
+          "hash": "17966758441340444674"
+        },
+        {
+          "file": "apps/demo-e2e/project.json",
+          "hash": "1534489517928321037"
+        },
+        {
+          "file": "apps/demo-e2e/src/demo/demo.spec.ts",
+          "hash": "4921700302217889162",
+          "deps": [
+            "npm:child_process",
+            "npm:path"
+          ]
+        },
+        {
+          "file": "apps/demo-e2e/src/test-setup.ts",
+          "hash": "12277343883897675151"
+        },
+        {
+          "file": "apps/demo-e2e/tsconfig.json",
+          "hash": "15443990093475294480"
+        },
+        {
+          "file": "apps/demo-e2e/tsconfig.spec.json",
+          "hash": "14384658316786387328"
         }
       ]
     }
