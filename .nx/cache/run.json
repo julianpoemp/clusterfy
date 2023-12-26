@@ -1,0 +1,21 @@
+{
+  "run": {
+    "command": "nx build clusterfy",
+    "startTime": "2023-12-26T08:16:26.267Z",
+    "endTime": "2023-12-26T08:16:27.112Z",
+    "inner": false
+  },
+  "tasks": [
+    {
+      "taskId": "clusterfy:build",
+      "target": "build",
+      "projectName": "clusterfy",
+      "hash": "18411273063523080149",
+      "startTime": "2023-12-26T08:16:26.271Z",
+      "endTime": "2023-12-26T08:16:27.111Z",
+      "params": "",
+      "cacheStatus": "cache-miss",
+      "status": 0
+    }
+  ]
+}

@@ -4,6 +4,8 @@ import { Address } from 'cluster';
 import {
   ClusterfyCommandRequest,
   ClusterfyIPCEvent,
+  ClusterfyIPCMethod,
+  ClusterfyPrimaryOptions,
   ClusterfyShutdownOptions,
   ClusterfyWorkerOptions,
   ClusterfyWorkerStatistics,
@@ -21,10 +23,17 @@ import {
   ClusterfyTimestampGetCommand,
   ClusterfyWorkerMetadataCommand,
 } from './commands';
+import * as console from 'console';
+import { connect, createServer, Server, Socket } from 'net';
+import * as os from 'os';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
 export class Clusterfy {
+  static get options(): ClusterfyPrimaryOptions {
+    return this._options;
+  }
+
   /**
    * returns the current worker. Undefined on primary.
    */
@@ -84,6 +93,9 @@ export class Clusterfy {
     name: string;
   }[] = [];
 
+  private static _options?: ClusterfyPrimaryOptions;
+  private static _socketServer?: Server;
+
   /**
    * Initializes the storage. Call this method on primary. The storage must be an object, e.g.
    * @param storage
@@ -101,7 +113,7 @@ export class Clusterfy {
     name?: string,
     options?: ClusterfyWorkerOptions
   ): ClusterfyWorker {
-    const worker = new ClusterfyWorker(cluster.fork(), name, options);
+    const worker = new ClusterfyWorker(cluster.fork(),  ClusterfyIPCMethod.message, name, options);
     this._workers.push(worker);
     worker.worker.on('online', () => {
       Clusterfy.onWorkerOnline(worker, name);
@@ -128,20 +140,38 @@ export class Clusterfy {
   /**
    * Initializes the primary with Clusterfy. This method must be called on primary (see example). If you want to include
    * graceful shutdown on process signals you need to add `shutdownOptions`.
-   * @param shutdownOptions
+   * @param options
    */
-  static async initAsPrimary(shutdownOptions?: ClusterfyShutdownOptions) {
+  static async initAsPrimary(options?: ClusterfyPrimaryOptions) {
+    this._options = options;
+
     if (!cluster.isPrimary) {
       throw new Error(
         `Can't initialize clusterfy as primary. Current process is worker process.`
       );
     }
 
-    process.on('exit', () => {
-      Clusterfy.destroy();
-    });
+    if (options?.ipc?.socket?.enabled) {
+      console.log('!!! CREATE SOCKET SERVER');
+      this._socketServer = createServer(
+        options.ipc.socket,
+        this.onSocketServerInit
+      );
 
-    Clusterfy.initShutdownRoutine(shutdownOptions);
+      if (os.type().includes('Windows')) {
+        // listen on windows pipe
+      } else {
+        // listen on Unix socket
+        this._socketServer.listen('/tmp/echo11.sock', () => {
+          console.log('!!!! PRIMARY SOCKET SERVER BOUND');
+        });
+      }
+    }
+
+    process.on('SIGINT', Clusterfy.destroy);
+    process.on('exit', Clusterfy.destroy);
+
+    Clusterfy.initShutdownRoutine(options?.shutdown);
 
     const promises = [];
     for (const worker of this._workers) {
@@ -155,6 +185,16 @@ export class Clusterfy {
 
     return Promise.all(promises);
   }
+
+  private static onSocketServerInit = (socket: Socket) => {
+    console.log(`!!!! PRIMARY SOCKET CLIENT CONNECTED`);
+    socket.on('data', (a) => {
+      console.log(JSON.parse(a.toString()));
+    });
+    socket.on('end', () => {
+      console.log(`!!! Client disconnected!`);
+    });
+  };
 
   static async waitForStatus(
     worker: ClusterfyWorker,
@@ -183,14 +223,15 @@ export class Clusterfy {
   /**
    * Initializes the worker with Clusterfy and waits for metadata from primary. This method must be called on worker (see
    * example). Wait until this method returns. If you want to include graceful shutdown on process signals you need to
-   * add `shutdownOptions`.
-   * @param shutdownOptions
+   * add `ClusterfySecondaryOptions.shutdown`.
+   * @param ClusterfySecondaryOptions
    */
   static async initAsWorker(
-    shutdownOptions?: ClusterfyShutdownOptions
+    method: ClusterfyIPCMethod,
+    options?: ClusterfyWorkerOptions
   ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      if (cluster.isPrimary) {
+      if (cluster.isPrimary && method === ClusterfyIPCMethod.message) {
         reject(
           new Error(
             `Can't initialize clusterfy as worker. Current process is primary.`
@@ -198,16 +239,38 @@ export class Clusterfy {
         );
       }
 
-      Clusterfy.initShutdownRoutine(shutdownOptions);
+      Clusterfy.initShutdownRoutine(options?.shutdown);
 
       process.on('exit', () => {
         Clusterfy.destroy();
       });
-      process.on('message', (message: ClusterfyIPCEvent) => {
-        Clusterfy.onMessageReceived(undefined, message);
-      });
 
-      Clusterfy._currentWorker = new ClusterfyWorker(cluster.worker);
+      if (method === ClusterfyIPCMethod.message) {
+        // is ipc message worker
+        process.on('message', (message: ClusterfyIPCEvent) => {
+          Clusterfy.onMessageReceived(undefined, message);
+        });
+      }
+
+      if (method === ClusterfyIPCMethod.socket) {
+        if (options.ipc.socket) {
+          if (options.ipc.socket.path) {
+            const client = connect(options.ipc.socket.path, () => {
+              console.log('connected');
+              client.write(JSON.stringify({ test: 'ok' }));
+            });
+          }
+        }
+      }
+
+      console.log(cluster.worker);
+      Clusterfy._currentWorker = new ClusterfyWorker(
+        cluster.worker,
+        method,
+        undefined,
+        options
+      );
+
       const subscr = this._events.subscribe({
         next: (event) => {
           if (
@@ -840,12 +903,6 @@ export class Clusterfy {
    * @param newStatus
    */
   static changeCurrentWorkerStatus(newStatus: ClusterfyWorkerStatus) {
-    if (this.isCurrentProcessPrimary()) {
-      throw new Error(
-        `changeCurrentWorkerStatus must be called on worker process.`
-      );
-    }
-
     const data = {
       newStatus,
       oldStatus: this.currentWorker.status,
@@ -861,16 +918,22 @@ export class Clusterfy {
     this.runIPCCommand<void>(this._commands.cy_status_change.name, data);
   }
 
-  private static destroy() {
+  private static destroy = () => {
     if (cluster.isPrimary) {
-      for (const { worker } of this._workers) {
-        worker.removeAllListeners();
+      if (this._workers) {
+        for (const { worker } of this._workers) {
+          worker.removeAllListeners();
+        }
       }
+
       process.removeAllListeners();
+      this._socketServer?.close(() => {
+        console.log('CLOSED!');
+      });
     } else {
       process.removeAllListeners();
     }
-  }
+  };
 
   static isCurrentProcessPrimary() {
     return cluster.isPrimary;
@@ -999,6 +1062,7 @@ export class ClusterfyWorker {
   private _worker: _cluster.Worker;
   private _status: ClusterfyWorkerStatus = ClusterfyWorkerStatus.INITIALIZING;
   private _name: string;
+  private _method: ClusterfyIPCMethod;
 
   private _options: ClusterfyWorkerOptions = {
     revive: false,
@@ -1010,11 +1074,14 @@ export class ClusterfyWorker {
 
   constructor(
     worker: _cluster.Worker,
+    method: ClusterfyIPCMethod,
     name?: string,
     options?: ClusterfyWorkerOptions
   ) {
+    console.log("worker is " + process?.pid + ` parent ${process?.ppid}`);
     this._worker = worker;
     this._name = name;
+    this._method = method;
     this._options = options ?? this._options;
   }
 }

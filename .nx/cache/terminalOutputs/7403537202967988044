@@ -1,0 +1,14 @@
+[4m[34mpackages/clusterfy/src/lib/clusterfy.ts:14:46[39m[24m - [31m[1merror[22m[39m [90mTS2307[39m: Cannot find module 'rxjs' or its corresponding type declarations.
+
+[0m [90m 12 | [39m  [33mClusterfyWorkerStatus[39m[33m,[39m[0m
+[0m [90m 13 | [39m} from [32m'./types'[39m[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 | [39m[36mimport[39m { [33mSubject[39m[33m,[39m [33mSubscription[39m[33m,[39m timer } from [32m'rxjs'[39m[33m;[39m[0m
+[0m [90m    | [39m                                             [31m[1m^[22m[39m[0m
+[0m [90m 15 | [39m[36mimport[39m { v4 as [33mUUIDv4[39m } from [32m'uuid'[39m[33m;[39m[0m
+[0m [90m 16 | [39m[36mimport[39m {[0m
+[0m [90m 17 | [39m  [33mClusterfyCommand[39m[33m,[39m[0m
+
+Found 1 error.
+[ [31mwatch[39m ] build finished with errors (see above), watching for changes...
+[1m[31mBuild failed, waiting for changes to restart...[39m[22m
+[1m[31mWatch error: Daemon closed the connection[39m[22m
