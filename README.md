@@ -1,4 +1,10 @@
-# Clusterfy <a href="https://www.npmjs.com/package/clusterfy"><img alt="npm" src="https://img.shields.io/npm/v/clusterfy"></a>
+![ClusterfyLogo](https://github.com/julianpoemp/clusterfy/assets/25926588/a67d8387-366f-4143-a8f3-ddf3087f98f4)
+
+<p style="text-align:center;">
+    
+<a href="https://www.npmjs.com/package/clusterfy"><img alt="npm" src="https://img.shields.io/npm/v/clusterfy"></a>
+
+
 
 This library simplifies managing processes in a NodeJS cluster. It supports IPC via messaging and a shared storage
 managed by the primary process.
@@ -7,6 +13,8 @@ managed by the primary process.
 
 For presentation timeouts were inserted. You can find the code to this terminal
 preview [here](https://github.com/julianpoemp/clusterfy/blob/main/packages/demo/src/main.ts).
+
+</p>
 
 # Features
 
