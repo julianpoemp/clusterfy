@@ -448,7 +448,7 @@ export class Clusterfy {
     args: Record<string, any>,
     commandEvent?: ClusterfyCommandRequest<any>
   ) => {
-    if (commandEvent.data?.command === Clusterfy._commands.cy_shutdown.name) {
+    if (commandEvent && commandEvent.data?.command === Clusterfy._commands.cy_shutdown.name) {
       args = {
         commands: Clusterfy._shutdownCommands,
       };
@@ -671,7 +671,7 @@ export class Clusterfy {
    * @param path
    * @param value
    */
-  static async saveToStorage(path: string, value: any): Promise<void> {
+  static async saveToStorage<T>(path: string, value: T): Promise<void> {
     return this.runIPCCommand<void>(this._commands.cy_storage_save.name, {
       path,
       value,
