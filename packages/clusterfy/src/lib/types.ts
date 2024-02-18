@@ -47,6 +47,10 @@ export class ClusterfyTCPOptions{
   enabled = false;
 }
 
+export class ClusterfyOptions {
+  shutdown?: ClusterfyShutdownOptions;
+}
+
 export class ClusterfyPrimaryOptions {
   shutdown?: ClusterfyShutdownOptions;
   ipc?: {
@@ -69,10 +73,6 @@ export enum ClusterfyIPCMethod{
 }
 
 export class ClusterfyWorkerOptions {
-  ipc?: {
-    socket?: ClusterfyWorkerSocketOptions,
-    tcp?: ClusterfyIPCOptions;
-  };
   shutdown?: ClusterfyShutdownOptions;
   name?: string;
   revive?: boolean;
@@ -129,24 +129,4 @@ export interface ClusterfyCommandRequest<T> extends ClusterfyIPCEvent {
     uuid: string;
     result?: ClusterfyCommandRequestResult<T>;
   };
-}
-
-export interface ClusterfyWorkerStatisticItem {
-  id: number;
-  name: string;
-  status: ClusterfyWorkerStatus;
-}
-
-export interface ClusterfyWorkerStatistics {
-  list: ClusterfyWorkerStatisticItem[];
-  workersOnline: number;
-}
-
-export enum ClusterfyWorkerStatus {
-  // worker is online and does nothing
-  'INITIALIZING' = 'INITIALIZING',
-  'LOADED' = 'LOADED',
-  'IDLE' = 'IDLE',
-  'PROCESSING' = 'PROCESSING',
-  'STOPPING' = 'STOPPING',
 }
